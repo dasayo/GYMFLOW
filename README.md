@@ -42,6 +42,25 @@ docker compose up
 - Frontend: http://localhost:5173
 - Postgres: localhost:5432
 
+## Evitar problemas de saltos de línea (CRLF/LF)
+
+Para que no se rompa el arranque del backend en Docker o entre Windows/Mac/Linux, mantén estos archivos con saltos de línea Unix:
+
+```bash
+git config core.autocrlf false
+git config core.eol lf
+git add --renormalize .
+```
+
+Si ya tuvieron problemas de line endings en una rama, antes de hacer push conviene correr:
+
+```bash
+git add --renormalize .
+git commit -m "Normalize line endings"
+```
+
+Esto ayuda a que tu compañero en Mac no tenga errores al hacer pull/commit/push por diferencias de formato.
+
 ## Tests
 
 ```bash

@@ -1,0 +1,17 @@
+# Normalizar saltos de línea para evitar problemas en Linux/Docker
+* text=auto eol=lf
+
+# Archivos sensibles a la plataforma
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.env text eol=lf
+Dockerfile text eol=lf
+
+# Scripts de Windows si se agregan más adelante
+*.bat text eol=crlf
+*.ps1 text eol=crlf

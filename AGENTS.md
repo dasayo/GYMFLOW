@@ -70,6 +70,7 @@ Monolito modular: cada módulo agrupa `router` + `service` + `repository` + `sch
 - **Idioma:** nombres de entidades y campos en español; variables y funciones de código en inglés.
 - **Tests al lado del código del módulo**, corriendo con `pytest`.
 - **Kiosko táctil primero:** botones ≥48×48px, alto contraste, legible a 1m. El backoffice puede ser más denso.
+- **Commits sin `Co-Authored-By`:** los mensajes de commit no llevan línea `Co-Authored-By` del agente. El repo es de un equipo humano; la autoría del commit la lleva quien lo pide.
 
 ## Regla de ambigüedad (no negociable)
 

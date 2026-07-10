@@ -9,7 +9,7 @@ GymFlow es un sistema de control de acceso físico y gestión de membresías par
 3. **Feedback visual** — pantalla de semáforo (permitido/denegado) con mensaje claro para el usuario y el staff, sin ambigüedad sobre el motivo de un rechazo. Aplica igual sin importar si el check-in fue por QR o manual.
 4. **Cortesía de primer día e invitados** — check-in de invitados con descuento atómico de cupos.
 5. **Backoffice (Administración)** — CRUD de usuarios y tipos de membresía, reportes de asistencia con exportación a XLSX/CSV.
-6. **Portal del socio (web)** — el Miembro inicia sesión con correo/contraseña para ver su resumen de membresía, estadísticas de asistencia y clases (ver mockups en `docs/`), y desde ahí escanea con la cámara del celular el QR del kiosko. Este login es el prerrequisito técnico del punto 1, no una feature aparte que compite con él.
+6. **Portal del socio (web)** — el Miembro inicia sesión con correo/contraseña para ver su resumen de membresía, estadísticas de asistencia y logros por racha (ver mockups en `docs/` y decisión de alcance en `011`/`013`), y desde ahí escanea con la cámara del celular el QR del kiosko. Este login es el prerrequisito técnico del punto 1, no una feature aparte que compite con él. **Workouts y Classes** (calorías, reserva de clases con recomendaciones) del mockup **quedan fuera del alcance** — no tienen ninguna regla de negocio de origen, son de una plantilla de app de fitness genérica, no de GymFlow.
 
 ## Para quién
 

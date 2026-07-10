@@ -6,6 +6,7 @@ Router de checkin (spec/features/001-checkin-membresia-activa,
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from auth.dependencies import require_permission
 from checkin.repository import CheckinDeviceLockRepository
 from checkin.schemas import CheckinRequest, CheckinResponse, DispositivoBloqueadoInfo
 from checkin.service import UsuarioNoEncontradoError, checkin_member
@@ -59,19 +60,20 @@ def post_checkin(
 
 
 @router.get("/dispositivos-bloqueados", response_model=list[DispositivoBloqueadoInfo])
-def get_dispositivos_bloqueados(db: Session = Depends(get_db)) -> list[DispositivoBloqueadoInfo]:
-    # TODO(003-autenticacion-segura): proteger con Depends de rol Staff —
-    # sin esto, hoy es la única forma de saber qué device_id desbloquear
-    # (no hay panel de staff todavía, ver spec/features/002-acceso-denegado/).
+def get_dispositivos_bloqueados(
+    db: Session = Depends(get_db),
+    _permiso: dict = Depends(require_permission("checkin.ver_dispositivos_bloqueados")),
+) -> list[DispositivoBloqueadoInfo]:
     bloqueados = CheckinDeviceLockRepository(db).listar_bloqueados(_now())
     return [DispositivoBloqueadoInfo.model_validate(b) for b in bloqueados]
 
 
 @router.post("/desbloquear/{device_id}")
-def post_desbloquear_dispositivo(device_id: str, db: Session = Depends(get_db)) -> dict:
-    # TODO(003-autenticacion-segura): proteger con Depends de rol Staff en
-    # cuanto exista el JWT de backoffice — hoy queda sin guard (decisión
-    # explícita, ver spec/features/002-acceso-denegado/tasks.md).
+def post_desbloquear_dispositivo(
+    device_id: str,
+    db: Session = Depends(get_db),
+    _permiso: dict = Depends(require_permission("checkin.desbloquear_dispositivo")),
+) -> dict:
     CheckinDeviceLockRepository(db).reset_attempts(device_id)
     db.commit()
     return {"mensaje": f"Dispositivo {device_id} desbloqueado."}

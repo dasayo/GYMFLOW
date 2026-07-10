@@ -13,3 +13,6 @@ class MembersRepository:
 
     def get_by_cedula(self, cedula: str) -> User | None:
         return self.db.query(User).filter(User.cedula == cedula).first()
+
+    def get_by_email(self, email: str) -> User | None:
+        return self.db.query(User).filter(User.email == email).first()

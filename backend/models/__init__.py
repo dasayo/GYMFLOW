@@ -9,6 +9,7 @@ from models.membership import Membership, EstadoMembresia
 from models.checkin import CheckIn, ResultadoCheckin
 from models.checkin_device_lock import CheckinDeviceLock
 from models.guest import Guest
+from models.permiso import Permiso, usuario_permisos
 
 __all__ = [
     "User",
@@ -21,4 +22,6 @@ __all__ = [
     "ResultadoCheckin",
     "CheckinDeviceLock",
     "Guest",
+    "Permiso",
+    "usuario_permisos",
 ]

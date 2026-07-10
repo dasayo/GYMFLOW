@@ -1,4 +1,6 @@
-import axios, { isAxiosError } from 'axios';
+import { isAxiosError } from 'axios';
+
+import { apiClient } from './client';
 
 export type CheckinResultado = 'exitoso' | 'denegado';
 
@@ -38,8 +40,6 @@ function getDeviceId(): string {
   return deviceId;
 }
 
-const apiClient = axios.create({ baseURL: '/api' });
-
 export async function postCheckin(cedula: string): Promise<CheckinResponse> {
   try {
     const { data } = await apiClient.post<CheckinResponse>(
@@ -60,4 +60,24 @@ export async function postCheckin(cedula: string): Promise<CheckinResponse> {
     }
     throw error;
   }
+}
+
+export interface DispositivoBloqueadoInfo {
+  device_id: string;
+  intentos_fallidos: number;
+  bloqueado_hasta: string;
+}
+
+export async function getDispositivosBloqueados(): Promise<DispositivoBloqueadoInfo[]> {
+  const { data } = await apiClient.get<DispositivoBloqueadoInfo[]>(
+    '/checkin/dispositivos-bloqueados',
+  );
+  return data;
+}
+
+export async function desbloquearDispositivo(deviceId: string): Promise<{ mensaje: string }> {
+  const { data } = await apiClient.post<{ mensaje: string }>(
+    `/checkin/desbloquear/${deviceId}`,
+  );
+  return data;
 }

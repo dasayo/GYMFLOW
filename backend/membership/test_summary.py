@@ -96,7 +96,6 @@ def test_resumen_miembro_activo_campos_completos(db):
 
 
 def test_dias_restantes_en_los_bordes_del_aviso(db):
-    socio = _crear_socio(db)
     tipo = _crear_tipo(db)
     for dias, cedula in ((11, "111"), (10, "222"), (0, "333")):
         otro = _crear_socio(db, cedula=cedula)

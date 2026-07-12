@@ -2,13 +2,14 @@
 Tests de membership/service.py contra los criterios de aceptación de
 spec/features/004-gestion-usuarios/spec.md (asignación y renovación).
 """
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
 
 from membership.service import (
     MembershipNoExisteError,
+    hoy,
     MembershipTypeNoEncontradoError,
     MembershipYaExisteError,
     create_membership,
@@ -51,8 +52,8 @@ def test_create_membership_primera_asignacion(db):
 
     assert membership.visitas_restantes == tipo.visitas_totales
     assert membership.cupo_invitados_restantes == tipo.cupo_invitados
-    assert membership.fecha_inicio == date.today()
-    assert membership.fecha_vencimiento == date.today() + timedelta(days=tipo.duracion_dias)
+    assert membership.fecha_inicio == hoy()
+    assert membership.fecha_vencimiento == hoy() + timedelta(days=tipo.duracion_dias)
     assert membership.monto == Decimal("50000")
     assert membership.nota == "efectivo"
 
@@ -85,15 +86,15 @@ def test_renew_membership_anterior_vencida_empieza_hoy(db):
     socio = _crear_socio(db)
     anterior = create_membership(socio.id, tipo.id, Decimal("50000"), None, db)
     # Simula que ya venció (ej. el socio renueva tarde).
-    anterior.fecha_vencimiento = date.today() - timedelta(days=5)
+    anterior.fecha_vencimiento = hoy() - timedelta(days=5)
     db.commit()
 
     nueva = renew_membership(socio.id, tipo.id, Decimal("50000"), None, db)
     db.commit()
 
-    assert nueva.fecha_inicio == date.today()
-    assert nueva.fecha_vencimiento == date.today() + timedelta(days=tipo.duracion_dias)
-    assert anterior.fecha_vencimiento == date.today() - timedelta(days=5)  # no se modifica
+    assert nueva.fecha_inicio == hoy()
+    assert nueva.fecha_vencimiento == hoy() + timedelta(days=tipo.duracion_dias)
+    assert anterior.fecha_vencimiento == hoy() - timedelta(days=5)  # no se modifica
 
 
 def test_renew_membership_anticipada_empieza_al_vencer_la_anterior(db):
@@ -156,7 +157,7 @@ def test_list_membership_history_orden_mas_reciente_primero(db):
     socio = _crear_socio(db)
     primera = create_membership(socio.id, tipo.id, Decimal("50000"), None, db)
     db.commit()
-    primera.fecha_vencimiento = date.today() - timedelta(days=1)
+    primera.fecha_vencimiento = hoy() - timedelta(days=1)
     db.commit()
     segunda = renew_membership(socio.id, tipo.id, Decimal("50000"), None, db)
     db.commit()

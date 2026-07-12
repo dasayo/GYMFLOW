@@ -8,6 +8,8 @@
 
 Muestra al miembro el estado de su membresía: **tipo**, **fecha de vencimiento**, **estado**, **visitas restantes** y **cupos de invitado restantes**. Si al socio le quedan **≤10 días** para que venza su membresía, se muestra además un aviso con los días exactos restantes; si le quedan más de 10 días, **no se muestra ningún aviso** (no tiene sentido recordarle a alguien con 200 días restantes que su membresía va a vencer).
 
+> **Decisión de canal (equipo, 2026-07-11):** el resumen completo se consulta **dentro del portal del socio** (`011`), autenticado con la sesión del Miembro (`GET /membresias/me/resumen`, el `user_id` sale del JWT). Se descarta el endpoint público del kiosko por cédula que proponía la versión anterior de `plan.md` (exponía datos sin auth y duplicaba el flujo). El kiosko no cambia: tras un check-in exitoso sigue mostrando el mínimo del semáforo de `001` (visitas restantes). Esto invierte el orden de implementación: `011` (auth del Miembro) va primero y `007` se monta sobre ella.
+
 ## Por qué
 
 El usuario debe recibir feedback inmediato sobre su cuenta (problemática §1: falta de feedback), evitando las discusiones incómodas de la validación manual. Es puramente informativo. **Cambio respecto a la versión anterior:** se quitó el campo "próximo pago" — GymFlow no procesa pagos (misión), así que mostrar una fecha de "pago" era engañoso; lo que sí puede calcular con certeza es cuánto falta para que la membresía venza (`fecha_vencimiento - hoy`), que es un dato real del sistema.

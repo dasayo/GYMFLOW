@@ -35,56 +35,96 @@ npm run dev
 
 ```bash
 cp .env.example .env
-docker compose up
+docker compose up --build
 ```
 
 - Backend: http://localhost:8000 (`/health` para verificar que levantó)
 - Frontend: http://localhost:5173
 - Postgres: localhost:5432
 
+El backend aplica las migraciones y **siembra solo los datos de desarrollo**
+(`backend/scripts/seed_dev.py`, idempotente; se salta con
+`ENVIRONMENT=production`): staff de prueba, un tipo de membresía "Mensual" y
+una socia demo. No hay pasos manuales: levantas el stack y ya puedes probar.
+
+⚠️ **Si tu volumen de datos es anterior a `feat(004)`** (cambio de hashing
+passlib/bcrypt → pwdlib/Argon2): el login devuelve 401 aunque la contraseña
+sea correcta, porque los hashes viejos ya no se pueden verificar. Resetea:
+
+```bash
+docker compose down -v      # borra el volumen con los hashes viejos
+docker compose up --build   # migra y re-siembra solo
+```
+
 ## Rutas del frontend
 
 - `/` — kiosko táctil de check-in (sin login, dispositivo físico).
 - `/staff/login` — login del backoffice (Empleado/Administrador, `003-autenticacion-segura`).
-- `/staff/dispositivos-bloqueados` — pantalla protegida: ver y desbloquear dispositivos de kiosko bloqueados (RN-03). Requiere login y, si el rol es Empleado, los permisos `checkin.ver_dispositivos_bloqueados`/`checkin.desbloquear_dispositivo` otorgados (ver siguiente sección). Administrador los tiene implícitos.
+- `/staff/home` — panel del backoffice (sidebar): usuarios y membresías (`004`), permisos, dispositivos bloqueados (RN-03).
+- `/portal/login` — portal del socio (`011`): login del Miembro con correo/contraseña.
+- `/portal/activar` — activación de cuenta del Miembro (la cuenta la crea el staff; el socio define su contraseña la primera vez).
+- `/portal` — dashboard del socio: resumen de membresía (`007`) con aviso de vencimiento (≤10 días).
 
-## Probar el backoffice (usuarios de prueba)
+## Cuentas de desarrollo (sembradas automáticamente)
 
-Todavía no existe `004-gestion-usuarios` (CRUD de usuarios), así que para probar el login del backoffice localmente hay que sembrar usuarios de Staff a mano. Hay un script para eso, idempotente (se puede correr las veces que haga falta):
+`docker compose up` (o `pipenv run python scripts/seed_dev.py` si trabajas sin
+Docker) deja estas cuentas — **solo para desarrollo local**, nunca producción:
 
-```bash
-cd backend
-pipenv run alembic upgrade head        # asegúrate de tener la BD migrada
-pipenv run python scripts/seed_dev_staff.py
-```
+| Cuenta | Contraseña | Qué es |
+|---|---|---|
+| `empleado@gymflow.test` | `ClaveSegura123` | Backoffice, rol Empleado con permisos de ejemplo otorgados (para probar la diferencia entre rol y permiso) |
+| `admin@gymflow.test` | `ClaveSegura123` | Backoffice, rol Administrador (todos los permisos, implícito) |
+| `laura@socia.test` (cédula `555444333`) | — sin activar | Socia demo con membresía "Mensual" activa: prueba el check-in del kiosko por cédula, y la activación + login del portal en `/portal/activar` |
 
-Crea (si no existen ya) dos cuentas — **solo para desarrollo local**, no usar en producción:
+El **catálogo de permisos** no lo crea ningún admin desde la UI: los códigos de
+permiso son de developer (nacen con la feature que les da lógica) y viajan en
+las migraciones Alembic. El admin solo otorga/quita códigos existentes.
 
-| Correo | Contraseña | Rol | Permisos |
-|---|---|---|---|
-| `empleado@gymflow.test` | `ClaveSegura123` | Empleado | `checkin.ver_dispositivos_bloqueados`, `checkin.desbloquear_dispositivo` (otorgados explícitamente, para poder probar la diferencia entre rol y permiso) |
-| `admin@gymflow.test` | `ClaveSegura123` | Administrador | Todos, implícito (no necesita filas en `usuario_permisos`) |
-
-⚠️ Los tests de backend (`pipenv run pytest`) truncan la tabla `usuarios` antes de cada test — si corres los tests después de sembrar estos usuarios, se borran. Hay que volver a correr `seed_dev_staff.py`.
+⚠️ Los tests de backend (`pipenv run pytest`) truncan las tablas antes de cada
+test — córrelos contra una base aparte (p. ej. `gymflow_test`), no contra la
+del stack de Docker. Si igual barriste la base de dev, `docker compose restart
+backend` (o el seed manual) la vuelve a sembrar.
 
 ## Evitar problemas de saltos de línea (CRLF/LF)
 
-Para que no se rompa el arranque del backend en Docker o entre Windows/Mac/Linux, mantén estos archivos con saltos de línea Unix:
+El repo ya trae `.gitattributes` (`* text=auto eol=lf`), que fuerza LF en el contenido versionado sin importar el sistema operativo. Aun así, hay dos casos donde igual te puede llegar CRLF a disco:
+
+**1. Clon nuevo, primera vez (sobre todo en Windows):**
 
 ```bash
 git config core.autocrlf false
 git config core.eol lf
-git add --renormalize .
 ```
 
-Si ya tuvieron problemas de line endings en una rama, antes de hacer push conviene correr:
+Esto evita que Git reintroduzca CRLF al hacer `checkout`, aunque no debería hacer falta porque `.gitattributes` ya lo fuerza.
+
+**2. Ya tenías el repo clonado y te sigue fallando (típicamente `docker-entrypoint.sh: /bin/bash^M: bad interpreter` al levantar el backend en Docker):**
+
+`.gitattributes` se agregó *después* del primer commit, así que si clonaste antes de esa fecha, Git nunca reescribió los archivos que ya tenías en disco — un `git pull` normal no vuelve a aplicar las reglas de fin de línea a archivos que no cambiaron de contenido. Hay que forzar un re-checkout completo:
+
+```bash
+git config core.autocrlf false
+git config core.eol lf
+git rm --cached -r .
+git reset --hard
+```
+
+Después, verificá que quedó bien:
+
+```bash
+git ls-files --eol | grep -i crlf   # no debería imprimir nada
+```
+
+Si tenías cambios sin commitear, guardalos con `git stash` antes de correr `git reset --hard` y recuperalos después con `git stash pop`.
+
+Si en cambio sos vos quien tiene una rama con archivos ya commiteados en CRLF (antes de que existiera `.gitattributes`), antes de hacer push conviene correr:
 
 ```bash
 git add --renormalize .
 git commit -m "Normalize line endings"
 ```
 
-Esto ayuda a que tu compañero en Mac no tenga errores al hacer pull/commit/push por diferencias de formato.
+Esto último arregla lo que se va a subir al repo; el paso 2 de arriba es el que arregla lo que ya tenés *en disco* después de bajar el `.gitattributes` nuevo.
 
 ## Tests
 

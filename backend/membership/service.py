@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from core.config import now as _now
 from membership.repository import MembershipRepository, MembershipTypeRepository
-from membership.schemas import MembershipSummary
+from membership.schemas import MembershipSummary, MembershipSummaryOut
 from models import EstadoMembresia, Membership, MembershipType
 
 
@@ -146,4 +146,52 @@ def get_membership_summary(user_id: int, db: Session) -> MembershipSummary | Non
         tipo=tipo.nombre if tipo else "",
         visitas_restantes=membership.visitas_restantes,
         fecha_vencimiento=membership.fecha_vencimiento,
+    )
+
+
+def get_membership_summary_detail(user_id: int, db: Session) -> MembershipSummaryOut:
+    """Resumen completo del portal (007, RF-04). Solo lectura: no descuenta
+    visitas/cupos ni registra CheckIn. Nunca falla por falta de membresía —
+    devuelve un DTO coherente con estado vencida/sin_plan (criterio del spec).
+    Si hay una renovación futura ya pagada, manda la fila vigente HOY (la
+    renovación se informará cuando empiece su ventana)."""
+    repo = MembershipRepository(db)
+    hoy_ = hoy()
+
+    # get_active_by_user no filtra por fecha_vencimiento a propósito (checkin
+    # la usa para distinguir la razón de RN-01) — aquí sí hay que revalidarla,
+    # igual que hace get_active_membership.
+    vigente = repo.get_active_by_user(user_id, hoy_)
+    if vigente is not None and vigente.fecha_vencimiento < hoy_:
+        vigente = None
+    if vigente is not None:
+        tipo = MembershipTypeRepository(db).get_by_id(vigente.tipo_id)
+        return MembershipSummaryOut(
+            estado="activa",
+            tipo=tipo.nombre if tipo else None,
+            fecha_vencimiento=vigente.fecha_vencimiento,
+            visitas_restantes=vigente.visitas_restantes,
+            cupo_invitados_restantes=vigente.cupo_invitados_restantes,
+            dias_restantes=(vigente.fecha_vencimiento - hoy_).days,
+        )
+
+    ultima = repo.get_latest_by_user(user_id)
+    if ultima is None:
+        return MembershipSummaryOut(
+            estado="sin_plan",
+            tipo=None,
+            fecha_vencimiento=None,
+            visitas_restantes=None,
+            cupo_invitados_restantes=None,
+            dias_restantes=None,
+        )
+
+    tipo = MembershipTypeRepository(db).get_by_id(ultima.tipo_id)
+    return MembershipSummaryOut(
+        estado="vencida",
+        tipo=tipo.nombre if tipo else None,
+        fecha_vencimiento=ultima.fecha_vencimiento,
+        visitas_restantes=ultima.visitas_restantes,
+        cupo_invitados_restantes=ultima.cupo_invitados_restantes,
+        dias_restantes=None,
     )

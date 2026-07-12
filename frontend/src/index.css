@@ -15,6 +15,9 @@
   --color-member-purple: #cd80e8;
   --color-member-bg: #f5f6fb;
   --color-member-muted: #5a5570;
+  /* Rojo/error del portal: sin dato en los mockups; el equipo adoptó el
+     red-600 estándar de Tailwind (design-system.md, resuelto 2026-07-11). */
+  --color-member-error: #dc2626;
 
   --radius-card: 1rem;
 }

@@ -1,12 +1,15 @@
 """
 Repository de auth — único punto de acceso a las tablas `permisos` y
-`usuario_permisos` (spec/features/003-autenticacion-segura). `auth` sigue
-sin repository para `usuarios`: eso sigue siendo de members (AGENTS.md).
+`usuario_permisos` (spec/features/003-autenticacion-segura) y `refresh_tokens`
+(spec/features/011-portal-miembro-autenticacion). `auth` sigue sin repository
+para `usuarios`: eso sigue siendo de members (AGENTS.md).
 """
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from models import Permiso, usuario_permisos
+from models import Permiso, RefreshToken, usuario_permisos
 
 
 class AuthRepository:
@@ -58,3 +61,27 @@ class AuthRepository:
                 usuario_permisos.c.permiso_id == permiso_id,
             )
         )
+
+
+class RefreshTokenRepository:
+    """Tabla `refresh_tokens` (011): sesión larga del Miembro. Solo se
+    persiste el hash del token; la generación/hash vive en auth/service."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(self, token: RefreshToken) -> RefreshToken:
+        self.db.add(token)
+        self.db.flush()
+        return token
+
+    def get_vigente_by_hash(self, token_hash: str, ahora: datetime) -> RefreshToken | None:
+        query = select(RefreshToken).where(
+            RefreshToken.token_hash == token_hash,
+            RefreshToken.revocado_en.is_(None),
+            RefreshToken.expira_en >= ahora,
+        )
+        return self.db.scalars(query).first()
+
+    def revoke(self, token: RefreshToken, ahora: datetime) -> None:
+        token.revocado_en = ahora

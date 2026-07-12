@@ -19,7 +19,7 @@ Prerrequisito de `012-checkin-qr-dinamico`: para que el socio pueda escanear el 
 ## Criterios de aceptación
 
 - [ ] Un Miembro con correo/contraseña válidos recibe un **access token** (JWT, vida corta, ej. 15 min) y un **refresh token** (vida larga).
-- [ ] El refresh token se puede usar para obtener un access token nuevo sin volver a pedir credenciales, **mientras el socio siga activo** dentro de la ventana de inactividad definida (ver duda abierta de duración).
+- [ ] El refresh token se puede usar para obtener un access token nuevo sin volver a pedir credenciales, **mientras el socio siga activo** dentro de la ventana de inactividad definida (**7 días deslizantes**, ver dudas resueltas).
 - [ ] Si pasa más tiempo que esa ventana sin que el socio use la web, el refresh token deja de ser válido y debe loguearse de nuevo con correo/contraseña.
 - [ ] El refresh token se renueva ("rota") cada vez que se usa, para reducir el riesgo de que un token robado siga siendo válido indefinidamente.
 - [ ] Credenciales inválidas → error claro sin revelar si el correo existe (mismo criterio que `003` para Staff/Admin).
@@ -27,11 +27,11 @@ Prerrequisito de `012-checkin-qr-dinamico`: para que el socio pueda escanear el 
 - [ ] Logueado, el Miembro ve su resumen de membresía (reutiliza `007`) sin poder modificar visitas/cupos (sigue siendo solo lectura).
 - [ ] Un usuario con rol Invitado o sin cuenta de Miembro **no puede** crear cuenta en este portal (el registro es exclusivo de Miembro).
 
-## Duda abierta (a confirmar, no soy quien decide el valor exacto)
+## Dudas resueltas (confirmadas por el equipo, 2026-07-11)
 
-- **Duración de la ventana de inactividad del refresh token:** en la conversación se acordó "días, no minutos" (ejemplo dado: 3 días a 1 semana), con renovación automática mientras haya uso. Falta fijar el número exacto — propuesta razonable para un proyecto académico: **7 días de inactividad** como corte, renovando la ventana en cada uso (sliding). Confirmar con el equipo antes de implementarlo como definitivo.
-- **Dónde se guarda el refresh token en el navegador:** recomendado `httpOnly` cookie (no `localStorage`, por seguridad ante XSS) — confirmar que el equipo puede manejar cookies cross-origin si el frontend y backend quedan en dominios/puertos distintos en desarrollo.
-- **Registro (sign-up):** ¿el Miembro se autorregistra con correo/contraseña, o la cuenta la crea el staff (en `004-gestion-usuarios`) y el Miembro solo "activa" su contraseña la primera vez? Los mockups no muestran una pantalla de registro, solo login/cuenta ya creada. **No se asume una respuesta** — queda para confirmar con el equipo antes de escribir `plan.md`.
+- **Duración de la ventana de inactividad del refresh token:** **7 días deslizantes** — el refresh token expira tras 7 días sin uso; cada uso rota el token y renueva la ventana.
+- **Dónde se guarda el refresh token en el navegador:** **cookie `httpOnly`** (no `localStorage`, por seguridad ante XSS). El access token vive solo en memoria del frontend. En desarrollo no hay problema cross-origin: el frontend ya consume la API vía proxy (mismo origen).
+- **Registro (sign-up):** **la cuenta la crea el staff** (alta del socio en `004`, con su correo) y el Miembro **activa** su cuenta la primera vez definiendo su contraseña. No hay autorregistro abierto. **Mecanismo de activación** (fijado al aprobar el plan de implementación): el Miembro entra a "Activar cuenta" e ingresa **cédula + correo**; si coinciden con un usuario rol `miembro` **sin `password_hash`**, define su contraseña (hash RN-12, mismo esquema que `003`). Si el usuario ya tiene contraseña o los datos no coinciden → error genérico sin revelar qué dato falló ni si la cuenta existe. No hay verificación por email (el proyecto no envía correos; recuperación de contraseña sigue fuera de alcance, igual que en `003`).
 
 ## Fuera de alcance
 

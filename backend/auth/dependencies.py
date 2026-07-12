@@ -39,6 +39,30 @@ def get_current_user(
     return payload
 
 
+def get_current_member(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+) -> dict:
+    """011: valida el access token del portal del Miembro. Exige el claim
+    `kind=member` (los JWT de staff de 003 no lo llevan, así una población de
+    tokens no sirve en la otra). Sin expiración deslizante: la renovación del
+    portal es por refresh token (rotación), no por reemisión silenciosa."""
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sesión expirada")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido")
+
+    if payload.get("kind") != "member" or payload.get("rol") != RolUsuario.miembro.value:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo para Miembros del portal")
+    return payload
+
+
+def require_member(payload: dict = Depends(get_current_member)) -> dict:
+    """Alias declarativo, simétrico a require_role: Depends(require_member)."""
+    return payload
+
+
 def require_role(*roles: RolUsuario):
     """RBAC declarativo por rol (RF-09): Depends(require_role(RolUsuario.administrador))."""
     permitidos = {r.value for r in roles}

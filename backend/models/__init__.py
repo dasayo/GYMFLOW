@@ -10,6 +10,7 @@ from models.checkin import CheckIn, ResultadoCheckin
 from models.checkin_device_lock import CheckinDeviceLock
 from models.guest import Guest
 from models.permiso import Permiso, usuario_permisos
+from models.refresh_token import RefreshToken
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "Guest",
     "Permiso",
     "usuario_permisos",
+    "RefreshToken",
 ]

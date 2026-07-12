@@ -20,5 +20,13 @@ done
 echo "Aplicando migraciones (alembic upgrade head)..."
 alembic upgrade head
 
+# Datos mínimos de desarrollo (staff, tipo de membresía, socia demo) para que
+# el stack sirva recién levantado sin pasos manuales. Idempotente. Se salta
+# solo en producción real (ENVIRONMENT=production).
+if [ "${ENVIRONMENT:-development}" != "production" ]; then
+  echo "Sembrando datos de desarrollo (scripts/seed_dev.py)..."
+  python scripts/seed_dev.py
+fi
+
 echo "Arrancando servidor..."
 exec "$@"

@@ -13,6 +13,7 @@ _TABLAS_DE_TEST = (
     "checkins",
     "checkin_device_locks",
     "membresias",
+    "refresh_tokens",
     "usuarios",
     "tipos_membresia",
     "invitados",

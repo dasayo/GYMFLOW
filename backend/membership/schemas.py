@@ -5,6 +5,7 @@ mano en el router (AGENTS.md).
 """
 from datetime import date
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -15,6 +16,20 @@ class MembershipSummary(BaseModel):
     tipo: str
     visitas_restantes: int
     fecha_vencimiento: date
+
+
+class MembershipSummaryOut(BaseModel):
+    """Resumen completo del portal del socio (007, RF-04). Solo datos de
+    membresía, sin PII. `dias_restantes` se calcula en cada consulta
+    (`fecha_vencimiento - hoy`), nunca se almacena; es `None` cuando no hay
+    membresía vigente (ya venció: no aplica contar días)."""
+
+    estado: Literal["activa", "vencida", "sin_plan"]
+    tipo: str | None
+    fecha_vencimiento: date | None
+    visitas_restantes: int | None
+    cupo_invitados_restantes: int | None
+    dias_restantes: int | None
 
 
 class MembershipTypeOut(BaseModel):

@@ -4,7 +4,7 @@ spec/features/001-checkin-membresia-activa/spec.md y
 spec/features/002-acceso-denegado/spec.md.
 """
 import threading
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -13,6 +13,7 @@ from checkin.repository import CheckinDeviceLockRepository
 from checkin.schemas import CheckinResultado, RazonDenegacion
 from checkin.service import checkin_member
 from core.config import now as _now
+from membership.service import hoy
 from core.database import engine
 from models import (
     CheckIn,
@@ -54,8 +55,11 @@ def _crear_socio(db, visitas_restantes=5, dias_vencimiento=30):
         tipo_id=tipo.id,
         visitas_restantes=visitas_restantes,
         cupo_invitados_restantes=tipo.cupo_invitados,
-        fecha_inicio=date.today(),
-        fecha_vencimiento=date.today() + timedelta(days=dias_vencimiento),
+        # hoy() de Bogotá (el mismo reloj que usa el servicio), NO date.today():
+        # en CI (UTC) difieren entre las 19:00 y medianoche de Bogotá y una
+        # membresía "de hoy" quedaría con fecha_inicio en el futuro → denegada.
+        fecha_inicio=hoy(),
+        fecha_vencimiento=hoy() + timedelta(days=dias_vencimiento),
         estado=EstadoMembresia.activa,
         monto=tipo.precio_base,
     )

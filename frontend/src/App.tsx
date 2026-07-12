@@ -1,4 +1,6 @@
-import { Route, Routes } from 'react-router';
+import { Outlet, Route, Routes } from 'react-router';
+
+import { MemberAuthProvider } from './context/MemberAuthContext';
 
 import CheckinKiosk from './components/CheckinKiosk';
 import Home from './components/Home';
@@ -9,6 +11,10 @@ import ProtectedRoute from './components/backoffice/ProtectedRoute';
 import StaffHome from './components/backoffice/StaffHome';
 import StaffLayout from './components/backoffice/StaffLayout';
 import UsersPage from './components/backoffice/UsersPage';
+import PortalActivate from './components/portal/PortalActivate';
+import PortalDashboard from './components/portal/PortalDashboard';
+import PortalLogin from './components/portal/PortalLogin';
+import PortalProtectedRoute from './components/portal/PortalProtectedRoute';
 
 function App() {
   return (
@@ -22,6 +28,21 @@ function App() {
           <Route path="/staff/usuarios" element={<UsersPage />} />
           <Route path="/staff/permisos" element={<PermissionsPage />} />
           <Route path="/staff/dispositivos-bloqueados" element={<DispositivosBloqueados />} />
+        </Route>
+      </Route>
+      {/* El provider del Miembro solo envuelve /portal/*: intenta un refresh
+          al montar y no queremos ese request en el kiosko ni en el backoffice. */}
+      <Route
+        element={
+          <MemberAuthProvider>
+            <Outlet />
+          </MemberAuthProvider>
+        }
+      >
+        <Route path="/portal/login" element={<PortalLogin />} />
+        <Route path="/portal/activar" element={<PortalActivate />} />
+        <Route element={<PortalProtectedRoute />}>
+          <Route path="/portal" element={<PortalDashboard />} />
         </Route>
       </Route>
     </Routes>

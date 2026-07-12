@@ -24,8 +24,10 @@
 >
 > **Decisión de alcance sobre los mockups (equipo, no ambigüedad):** de las 6 pantallas del mockup del portal, solo **Dashboard**, **Account** y **Achievements** entran — todas con datos reales detrás. **Workouts** y **Classes** (calorías, reserva de clases con IA) se cortan del entregable por completo: no tienen ninguna regla de negocio de origen en `docs/`, son contenido de una plantilla de fitness genérica que se coló en el mockup. Ver la nota en `011` y en `mission.md`.
 
+> **Orden de implementación 011 → 007 (equipo, 2026-07-11):** el resumen de `007` se consulta dentro del portal autenticado del Miembro, no por un endpoint público del kiosko (decisión registrada en `007/spec.md`). Por eso `011` (auth del Miembro) se implementa primero y `007` se monta sobre esa sesión — se entregan juntas. No se renumeran las features.
+
 - **007 · Resumen de membresía** — HU-06. Detalle de tipo, vencimiento y visitas restantes. Es el dato que alimenta el Dashboard del portal (`011`).
-- **011 · Portal del socio y autenticación** — Login/registro del Miembro con correo/contraseña, sesión larga con refresh token, y pantalla de resumen (reutiliza el endpoint de `007`). Prerrequisito de `012` y `013`.
+- **011 · Portal del socio y autenticación** — Login del Miembro con correo/contraseña (cuenta creada por staff en `004`, activada por el socio), sesión larga con refresh token, y pantalla de resumen (reutiliza el endpoint de `007`). Prerrequisito de `012` y `013`.
 - **012 · Check-in por QR dinámico (HU-03 — flujo esencial del producto)** — El kiosko muestra un QR que rota, el socio lo escanea desde el portal web (botón de cámara), el backend valida su sesión + el QR y notifica al kiosko por WebSocket. Reutiliza el motor de reglas de `001`. Depende de `011` y reemplaza el workaround de "QR estático" que quedó anotado como pendiente en `008`.
 - **013 · Logros por racha de asistencia** — Sin HU de origen (decisión del equipo): pantalla de Achievements del mockup, con datos reales calculados de `CheckIn.isActive` (racha actual, racha más larga, insignias por umbral). Depende de `011` (mismo portal).
 

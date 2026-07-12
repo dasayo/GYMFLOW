@@ -41,10 +41,10 @@
 | `text-heading` | `#3d4a68` | Títulos |
 | `text-muted` | `#5a5570` *(aprox.)* | Subtítulos y texto secundario ("Track your fitness journey", "Welcome, Alex") |
 
-### Sin dato en los mockups (no inventar, confirmar con el equipo)
+### Sin dato en los mockups (resueltos por el equipo, 2026-07-11)
 
-- **Rojo/error** — ninguna de las 8 pantallas muestra un estado de error o denegación en el portal del socio. El kiosko ya tiene su propio semáforo rojo (`002-acceso-denegado`), pero el portal web no tiene referencia visual para, por ejemplo, "QR expirado" o "sesión inválida". **Duda abierta:** definir con el equipo si se reutiliza algún rojo estándar de Tailwind (ej. `red-600` `#dc2626`) o se pide un mockup adicional.
-- **Tipografía exacta** — no se puede extraír el nombre de la fuente desde una imagen rasterizada. Visualmente es una sans-serif geométrica consistente con `Inter` o `system-ui` (look de las apps SaaS del Diseño Preliminar), pero esto es una suposición de similitud visual, no un dato confirmado. **Duda abierta:** confirmar con el equipo de diseño si hay una fuente específica elegida, o adoptar `Inter` como default razonable vía `@fontsource/inter` o Google Fonts.
+- **Rojo/error** — ninguna de las 8 pantallas muestra un estado de error o denegación en el portal del socio. **Resuelto:** se adopta el `red-600` estándar de Tailwind (`#dc2626`) como token `--color-member-error`, para credenciales inválidas, activación fallida, sesión expirada, etc.
+- **Tipografía exacta** — no se puede extraer el nombre de la fuente desde una imagen rasterizada. **Resuelto:** se adopta `system-ui` (stack del sistema): cero dependencias nuevas, sin descargas externas (el kiosko debe funcionar sin internet) y visualmente consistente con el mockup. Es lo que ya usa el resto del frontend.
 
 ## Componentes recurrentes observados
 

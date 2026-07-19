@@ -58,6 +58,24 @@ class CheckinRepository:
             .all()
         )
 
+    def list_successful_by_user_in_range(
+        self, user_id: int, fecha_inicio: date, fecha_fin: date
+    ) -> list[CheckIn]:
+        """Consulta de solo lectura de asistencias exitosas del usuario en el
+        rango de fechas solicitado para mostrar constancia en el portal."""
+        dia_gimnasio = func.date(func.timezone(settings.timezone, CheckIn.fecha_hora))
+        return (
+            self.db.query(CheckIn)
+            .filter(
+                CheckIn.usuario_id == user_id,
+                CheckIn.is_active.is_(True),
+                dia_gimnasio >= fecha_inicio,
+                dia_gimnasio <= fecha_fin,
+            )
+            .order_by(CheckIn.fecha_hora.asc(), CheckIn.id.asc())
+            .all()
+        )
+
 
 class CheckinDeviceLockRepository:
     """RN-03 (002-acceso-denegado): contador de intentos fallidos por

@@ -11,7 +11,6 @@ convenciones — este README es solo un quickstart.
 
 - `backend/` — API FastAPI (monolito modular)
 - `frontend/` — kiosko táctil + backoffice (React + Vite + Tailwind)
-- `spec/` — constitución + specs de cada feature (SDD)
 - `docs/` — material fuente original (propuesta, análisis, diagramas)
 
 ## Quickstart local
@@ -45,11 +44,11 @@ docker compose up --build
 El backend aplica las migraciones y **siembra solo los datos de desarrollo**
 (`backend/scripts/seed_dev.py`, idempotente; se salta con
 `ENVIRONMENT=production`): staff de prueba, un tipo de membresía "Mensual" y
-una socia demo. No hay pasos manuales: levantas el stack y ya puedes probar.
+una socia demo. No hay pasos manuales: se levanta el stack y se puedes probar.
 
-⚠️ **Si tu volumen de datos es anterior a `feat(004)`** (cambio de hashing
+⚠️ **Si el volumen de datos es anterior a `feat(004)`** (cambio de hashing
 passlib/bcrypt → pwdlib/Argon2): el login devuelve 401 aunque la contraseña
-sea correcta, porque los hashes viejos ya no se pueden verificar. Resetea:
+sea correcta, porque los hashes viejos ya no se pueden verificar. Resetear:
 
 ```bash
 docker compose down -v      # borra el volumen con los hashes viejos
@@ -67,8 +66,8 @@ docker compose up --build   # migra y re-siembra solo
 
 ## Cuentas de desarrollo (sembradas automáticamente)
 
-`docker compose up` (o `pipenv run python scripts/seed_dev.py` si trabajas sin
-Docker) deja estas cuentas — **solo para desarrollo local**, nunca producción:
+`docker compose up` (o `pipenv run python scripts/seed_dev.py` si se trabaja sin
+Docker) se dejan estas cuentas — **solo para desarrollo local**, nunca producción:
 
 | Cuenta | Contraseña | Qué es |
 |---|---|---|
@@ -81,13 +80,13 @@ permiso son de developer (nacen con la feature que les da lógica) y viajan en
 las migraciones Alembic. El admin solo otorga/quita códigos existentes.
 
 ⚠️ Los tests de backend (`pipenv run pytest`) truncan las tablas antes de cada
-test — córrelos contra una base aparte (p. ej. `gymflow_test`), no contra la
-del stack de Docker. Si igual barriste la base de dev, `docker compose restart
+test — se deben correr contra una base aparte (p. ej. `gymflow_test`), no contra la
+del stack de Docker. Si igual se barrió la base de dev, `docker compose restart
 backend` (o el seed manual) la vuelve a sembrar.
 
 ## Evitar problemas de saltos de línea (CRLF/LF)
 
-El repo ya trae `.gitattributes` (`* text=auto eol=lf`), que fuerza LF en el contenido versionado sin importar el sistema operativo. Aun así, hay dos casos donde igual te puede llegar CRLF a disco:
+El repo ya trae `.gitattributes` (`* text=auto eol=lf`), que fuerza LF en el contenido versionado sin importar el sistema operativo. Aun así, hay dos casos donde igual puede llegar CRLF a disco:
 
 **1. Clon nuevo, primera vez (sobre todo en Windows):**
 
@@ -98,7 +97,7 @@ git config core.eol lf
 
 Esto evita que Git reintroduzca CRLF al hacer `checkout`, aunque no debería hacer falta porque `.gitattributes` ya lo fuerza.
 
-**2. Ya tenías el repo clonado y te sigue fallando (típicamente `docker-entrypoint.sh: /bin/bash^M: bad interpreter` al levantar el backend en Docker):**
+**2. Ya se tenía el repo clonado y te sigue fallando (típicamente `docker-entrypoint.sh: /bin/bash^M: bad interpreter` al levantar el backend en Docker):**
 
 `.gitattributes` se agregó *después* del primer commit, así que si clonaste antes de esa fecha, Git nunca reescribió los archivos que ya tenías en disco — un `git pull` normal no vuelve a aplicar las reglas de fin de línea a archivos que no cambiaron de contenido. Hay que forzar un re-checkout completo:
 
@@ -115,9 +114,9 @@ Después, verificá que quedó bien:
 git ls-files --eol | grep -i crlf   # no debería imprimir nada
 ```
 
-Si tenías cambios sin commitear, guardalos con `git stash` antes de correr `git reset --hard` y recuperalos después con `git stash pop`.
+Si se tenía cambios sin commitear, se guardan con `git stash` antes de correr `git reset --hard` y se recuperan después con `git stash pop`.
 
-Si en cambio sos vos quien tiene una rama con archivos ya commiteados en CRLF (antes de que existiera `.gitattributes`), antes de hacer push conviene correr:
+Si en cambio se quien tiene una rama con archivos ya commiteados en CRLF (antes de que existiera `.gitattributes`), antes de hacer push conviene correr:
 
 ```bash
 git add --renormalize .

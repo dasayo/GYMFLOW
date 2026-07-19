@@ -10,7 +10,8 @@ entrada que otros módulos pueden llamar para leer/mutar datos de checkin.
 Ningún otro módulo debe importar checkin/repository.py directamente.
 """
 import re
-from datetime import date
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,8 +19,8 @@ from sqlalchemy.orm import Session
 import membership.service as membership_service
 import members.service as members_service
 from checkin.repository import CheckinDeviceLockRepository, CheckinRepository
-from checkin.schemas import CheckinResultado, RazonDenegacion
-from core.config import now as _now
+from checkin.schemas import AttendanceConsistencyOut, AttendancePointOut, CheckinResultado, RazonDenegacion
+from core.config import now as _now, settings
 from membership.schemas import MembershipSummary
 from models import CheckIn, ResultadoCheckin
 
@@ -120,6 +121,48 @@ def get_attendance(fecha_inicio: date, fecha_fin: date, db: Session) -> list[Che
     return CheckinRepository(db).list_attendances_in_range(fecha_inicio, fecha_fin)
 
 
+def get_member_attendance_consistency(
+    user_id: int, db: Session, period: str = "semana"
+) -> AttendanceConsistencyOut:
+    """Devuelve una serie simple de asistencia para la vista del portal del
+    socio, ya sea por semana o por mes."""
+    periodo = period.lower()
+    if periodo not in {"semana", "mes"}:
+        periodo = "semana"
+
+    dias = 7 if periodo == "semana" else 30
+    fecha_fin = membership_service.hoy()
+    fecha_inicio = fecha_fin - timedelta(days=dias - 1)
+
+    registros = CheckinRepository(db).list_successful_by_user_in_range(
+        user_id, fecha_inicio, fecha_fin
+    )
+
+    puntos = [
+        {"fecha": fecha_inicio + timedelta(days=offset), "asistencias": 0}
+        for offset in range(dias)
+    ]
+
+    for registro in registros:
+        if registro.fecha_hora is None:
+            continue
+        dia_registro = _local_date(registro.fecha_hora)
+        if not (fecha_inicio <= dia_registro <= fecha_fin):
+            continue
+        indice = (dia_registro - fecha_inicio).days
+        if 0 <= indice < dias:
+            puntos[indice]["asistencias"] += 1
+
+    return AttendanceConsistencyOut(
+        periodo=periodo,
+        total=sum(punto["asistencias"] for punto in puntos),
+        puntos=[
+            AttendancePointOut(fecha=punto["fecha"], asistencias=punto["asistencias"])
+            for punto in puntos
+        ],
+    )
+
+
 def _razon_rn01(user_id: int, db: Session) -> tuple[RazonDenegacion, str]:
     """Distingue MEMBRESIA_VENCIDA de SIN_VISITAS cuando RN-01 no se cumple
     (spec.md de 002). Sin fila `activa` en absoluto se trata como vencida —
@@ -148,6 +191,12 @@ def _respuesta_exitosa(nombre: str | None, resumen: MembershipSummary | None):
         visitas,
         None,
     )
+
+
+def _local_date(fecha_hora: 'datetime') -> date:
+    if fecha_hora.tzinfo is None:
+        fecha_hora = fecha_hora.replace(tzinfo=ZoneInfo('UTC'))
+    return fecha_hora.astimezone(ZoneInfo(settings.timezone)).date()
 
 
 def _respuesta_denegada(razon: RazonDenegacion, mensaje: str, nombre: str | None):

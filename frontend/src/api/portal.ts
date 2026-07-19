@@ -24,6 +24,17 @@ export interface MembershipSummary {
   dias_restantes: number | null;
 }
 
+export interface AttendancePoint {
+  fecha: string;
+  asistencias: number;
+}
+
+export interface AttendanceConsistency {
+  periodo: 'semana' | 'mes';
+  total: number;
+  puntos: AttendancePoint[];
+}
+
 export const portalClient = axios.create({ baseURL: '/api', withCredentials: true });
 
 portalClient.interceptors.request.use((config) => {
@@ -102,5 +113,14 @@ export async function portalLogout(): Promise<void> {
 
 export async function getMembershipSummary(): Promise<MembershipSummary> {
   const { data } = await portalClient.get<MembershipSummary>('/membresias/me/resumen');
+  return data;
+}
+
+export async function getAttendanceConsistency(
+  period: AttendanceConsistency['periodo'],
+): Promise<AttendanceConsistency> {
+  const { data } = await portalClient.get<AttendanceConsistency>('/checkin/me/constancia', {
+    params: { period },
+  });
   return data;
 }

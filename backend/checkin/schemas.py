@@ -4,7 +4,8 @@ spec/features/001, 002, 005, 006/. Toda validación de entrada vive aquí, nunca
 mano en el router (AGENTS.md).
 """
 import enum
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -34,6 +35,17 @@ class CheckinResponse(BaseModel):
     nombre: str | None = None
     visitas_restantes: int | None = None
     razon: RazonDenegacion | None = None
+
+
+class AttendancePointOut(BaseModel):
+    fecha: date
+    asistencias: int
+
+
+class AttendanceConsistencyOut(BaseModel):
+    periodo: Literal["semana", "mes"]
+    total: int
+    puntos: list[AttendancePointOut]
 
 
 class DispositivoBloqueadoResponse(BaseModel):

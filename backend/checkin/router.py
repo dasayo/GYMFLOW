@@ -3,13 +3,20 @@ Router de checkin (spec/features/001-checkin-membresia-activa,
 002-acceso-denegado). Validación de entrada con Pydantic
 (checkin/schemas.py), nunca a mano aquí (AGENTS.md).
 """
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from auth.dependencies import require_permission
+from auth.dependencies import require_member, require_permission
 from checkin.repository import CheckinDeviceLockRepository
-from checkin.schemas import CheckinRequest, CheckinResponse, DispositivoBloqueadoInfo
-from checkin.service import UsuarioNoEncontradoError, checkin_member
+from checkin.schemas import (
+    AttendanceConsistencyOut,
+    CheckinRequest,
+    CheckinResponse,
+    DispositivoBloqueadoInfo,
+)
+from checkin.service import UsuarioNoEncontradoError, checkin_member, get_member_attendance_consistency
 from core.config import now as _now
 from core.database import get_db
 
@@ -57,6 +64,15 @@ def post_checkin(
         visitas_restantes=visitas_restantes,
         razon=razon,
     )
+
+
+@router.get("/me/constancia", response_model=AttendanceConsistencyOut)
+def get_mi_constancia(
+    period: Literal["semana", "mes"] = "semana",
+    db: Session = Depends(get_db),
+    member=Depends(require_member),
+) -> AttendanceConsistencyOut:
+    return get_member_attendance_consistency(int(member["sub"]), db, period)
 
 
 @router.get("/dispositivos-bloqueados", response_model=list[DispositivoBloqueadoInfo])

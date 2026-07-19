@@ -3,7 +3,7 @@ Tests del resumen de membresía (007, RF-04): GET /membresias/me/resumen y
 get_membership_summary_detail — contra los criterios de aceptación de
 spec/features/007-resumen-membresia/spec.md.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -148,6 +148,56 @@ def test_resumen_no_descuenta_ni_registra_checkin(db):
     assert membresia.visitas_restantes == 12
     assert membresia.cupo_invitados_restantes == 2
     assert db.scalar(select(func.count()).select_from(CheckIn)) == 0
+
+
+def test_constancia_semana_para_portal(db):
+    socio = _crear_socio(db)
+    tipo = _crear_tipo(db)
+    _crear_membresia(db, socio, tipo, vence_en_dias=20)
+
+    db.add_all(
+        [
+            CheckIn(
+                usuario_id=socio.id,
+                fecha_hora=datetime.now() - timedelta(days=1),
+                resultado="exitoso",
+                is_active=True,
+            ),
+            CheckIn(
+                usuario_id=socio.id,
+                fecha_hora=datetime.now(),
+                resultado="exitoso",
+                is_active=True,
+            ),
+            CheckIn(
+                usuario_id=socio.id,
+                fecha_hora=datetime.now() - timedelta(days=8),
+                resultado="exitoso",
+                is_active=True,
+            ),
+        ]
+    )
+    db.commit()
+
+    resp = client.get(
+        "/checkin/me/constancia",
+        headers={"Authorization": f"Bearer {_token_miembro(socio)}"},
+        params={"period": "semana"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["periodo"] == "semana"
+    assert body["total"] == 2
+    assert any(point["fecha"] == str(HOY) and point["asistencias"] == 1 for point in body["puntos"])
+    assert any(
+        point["fecha"] == str(HOY - timedelta(days=1)) and point["asistencias"] == 1
+        for point in body["puntos"]
+    )
+    assert any(
+        point["fecha"] == str(HOY - timedelta(days=6)) and point["asistencias"] == 0
+        for point in body["puntos"]
+    )
 
 
 # --- Guard: solo el Miembro del portal, nunca staff ni anónimos ---

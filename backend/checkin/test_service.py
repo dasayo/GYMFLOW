@@ -4,15 +4,16 @@ spec/features/001-checkin-membresia-activa/spec.md y
 spec/features/002-acceso-denegado/spec.md.
 """
 import threading
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.orm import sessionmaker
 
 from checkin.repository import CheckinDeviceLockRepository
 from checkin.schemas import CheckinResultado, RazonDenegacion
-from checkin.service import checkin_member
-from core.config import now as _now
+from checkin.service import checkin_member, get_member_attendance_consistency
+from core.config import now as _now, settings
 from membership.service import hoy
 from core.database import engine
 from models import (
@@ -81,6 +82,28 @@ def test_checkin_exitoso_descuenta_exactamente_una_visita(db):
 
     db.refresh(membership)
     assert membership.visitas_restantes == 4
+
+
+def test_constancia_usa_fecha_local_correcta_para_checkins_utc(db):
+    user, _ = _crear_socio(db, visitas_restantes=5)
+    local_hoy = hoy()
+    local_time = datetime(local_hoy.year, local_hoy.month, local_hoy.day, 23, 0, tzinfo=ZoneInfo(settings.timezone))
+    utc_time = local_time.astimezone(timezone.utc)
+
+    db.add(
+        CheckIn(
+            usuario_id=user.id,
+            fecha_hora=utc_time,
+            resultado="exitoso",
+            is_active=True,
+        )
+    )
+    db.commit()
+
+    constancia = get_member_attendance_consistency(user.id, db, period="semana")
+
+    assert constancia.total == 1
+    assert any(point.fecha == local_hoy and point.asistencias == 1 for point in constancia.puntos)
 
 
 def test_segundo_checkin_mismo_dia_no_descuenta_de_nuevo(db):

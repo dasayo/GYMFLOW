@@ -1,30 +1,74 @@
 # 006 · Check-in de invitado — Plan
 
+> **Actualizado tras la implementación (2026-07-20).** El equipo decidió acotar
+> el alcance a **solo el "Camino 2"** del `spec.md`: el titular **siempre debe
+> estar presente** para hacer entrar a su invitado. Esto **elimina la ventana
+> temporal de RN-04** (y sus dudas abiertas de duración / por-dispositivo-o-global)
+> y el auto-check-in del invitado (Camino 1), que quedan **fuera del alcance
+> entregado**. El plan de abajo refleja lo realmente construido.
+
 ## Enfoque
 
-El módulo **`checkin`** orquesta: resuelve al titular vía `members.service`, valida su membresía y cupos vía `membership.service`, comprueba la **ventana temporal de RN-04** consultando su **propia** tabla `CheckIn` (el último check-in exitoso del titular), y descuenta el cupo vía `membership.service` — todo en **una única transacción** (RN-10). El `Guest` se registra/consulta vía `members.service`.
+El módulo **`checkin`** orquesta: resuelve al titular vía `members.service`,
+valida su membresía y cupo vía `membership.service`, y descuenta el cupo +
+registra el `CheckIn` del invitado en **una única transacción** (RN-10). Sin
+consultar la tabla `CheckIn` en busca de una ventana temporal (no hay ventana).
 
-## Implementación
+## Decisión de modelado (resuelve dos dudas abiertas)
 
-1. `checkin/schemas.py`: `GuestCheckinIn` (cédula/datos del invitado + cédula del titular).
-2. `checkin/service.py :: checkin_guest(datos, db)`:
-   1. `members.service.get_user_by_cedula(titular_cedula, db)` → titular.
-   2. `membership.service.get_active_membership(titular_id, db)` → valida activa + `cupo_invitados_restantes > 0` (RN-04).
-   3. **RN-04 ventana:** `checkin.repository.get_last_successful_member_checkin(titular_id, device_id, db)`; si no existe o está fuera de la ventana (`> VENTANA_INVITADO`) → **Denegado**.
-   4. `members.service.upsert_guest(datos_invitado, titular_id, db)` → registra/recupera `Guest`.
-   5. **Transacción única:** `membership.service.consume_guest_slot(membership_id, db)` (`SELECT … FOR UPDATE` + decremento de `cupo_invitados_restantes`) **+** `checkin.repository.insert(CheckIn Exitoso, usuario_id=invitado, titular_id)` → `commit`; ante fallo → `rollback`.
-3. `checkin/router.py`: `POST /checkin/guest`, protegido por el guard de dispositivo de la feature `002` (RN-03).
-4. `core/config.py`: parámetro `VENTANA_INVITADO_MIN` (default 10).
-5. Frontend: flujo de invitado en el kiosko con confirmación del titular.
+`CheckIn.usuario_id` es un FK **NOT NULL** a `usuarios`, pero un invitado vive
+conceptualmente en `invitados`. Decisión del equipo: **la identidad del invitado
+es una fila en `usuarios` con `rol=invitado`** (igual que un prospecto en `005`),
+creada/reutilizada por `members.service.get_or_create_guest_user`. Con esto:
+
+- No se toca el esquema de `CheckIn`, su índice único parcial ni los reportes (`010`).
+- La tabla `invitados` (`Guest`) **queda sin uso** por ahora; su duda de propiedad
+  se vuelve irrelevante en este alcance.
+- El vínculo invitado↔titular se registra en `CheckIn.titular_id`.
+
+## Implementación (construido)
+
+1. `checkin/schemas.py`: `GuestCheckinRequest` (`cedula_titular`, `cedula_invitado`,
+   `nombre_invitado`; valida cédulas 5-15 dígitos, nombre no vacío, y titular ≠
+   invitado). Nuevas razones `TITULAR_NO_ENCONTRADO`, `TITULAR_SIN_MEMBRESIA`,
+   `SIN_CUPO_INVITADOS`.
+2. `members/service.py :: get_or_create_guest_user(cedula, nombre, db)` → fila
+   `usuarios` rol=invitado. Flush, no commit.
+3. `membership/service.py`:
+   - `get_membership_for_guest(titular_id, db)` → membresía activa y no vencida
+     del titular, **sin** exigir `visitas_restantes > 0` (el invitado descuenta
+     cupo, no las visitas del titular).
+   - `consume_guest_slot(membership_id, db)` → `SELECT … FOR UPDATE` + decremento
+     de `cupo_invitados_restantes` (RN-09). Flush, no commit.
+4. `checkin/service.py :: checkin_guest(cedula_titular, cedula_invitado, nombre, db)`:
+   titular no encontrado / sin membresía / sin cupo → Denegado con su razón.
+   Si el invitado ya ingresó hoy → éxito idempotente sin re-descontar (Filtro 1,
+   análogo a `001`). Si no → **transacción única**: `consume_guest_slot` +
+   `CheckIn(usuario_id=invitado, titular_id=titular, Exitoso, is_active=True)` →
+   `commit`. `IntegrityError` (carrera del mismo invitado) → `rollback` + éxito
+   idempotente.
+5. `checkin/router.py :: POST /checkin/guest`, con el guard de dispositivo de
+   `002` (RN-03), como el check-in normal del kiosko.
+6. Frontend: modo "Ingresar un invitado" en el kiosko (`CheckinKiosk`) — formulario
+   con cédula del titular, cédula y nombre del invitado; reutiliza el semáforo
+   verde/rojo.
 
 ## Decisiones
 
-- **RN-04 como ventana temporal sobre el último check-in del titular** — se interpreta "justo después" como: el titular hizo check-in exitoso en el mismo dispositivo dentro de `VENTANA_INVITADO_MIN`. Se descarta validar solo cupos (incumpliría RN-04). **Duración marcada como duda abierta.**
-- **`Guest` gestionado por `members`** — es un registro de persona; `checkin` lo pide vía `members.service`. Duda de propiedad marcada.
-- **`FOR UPDATE` sobre la membresía del titular** — evita descontar el mismo cupo dos veces en concurrencia (RN-09/RN-10).
+- **Solo titular presente (sin ventana)** — decisión del equipo; la presencia
+  del titular sustituye a la ventana temporal de RN-04, y con ella se evita el
+  abuso del cupo sin el titular. Por eso no se implementa el Camino 1.
+- **Invitado = fila `usuarios` rol=invitado** — ver "Decisión de modelado".
+- **`FOR UPDATE` sobre la membresía del titular** — evita doble descuento del
+  cupo en concurrencia (RN-09/RN-10).
 
-## Riesgos
+## Riesgos / notas
 
-- **Ventana mal definida** → falsos positivos/negativos; mitigar con parámetro configurable + tests de tiempo inyectable.
-- **Titular y invitado en dispositivos distintos** → decisión inicial: la ventana es por dispositivo; documentar y confirmar.
-- **Regla de módulos** → `checkin` nunca consulta `Membership` ni `User` directamente; solo `*.service`.
+- **Reingreso del mismo invitado el mismo día** → no se descuenta doble (Filtro 1
+  + `IntegrityError` como red de seguridad sobre el índice único parcial).
+- **Interacción con `005`**: como un invitado queda como `usuarios` registrado,
+  una futura cortesía de primer día para esa misma cédula se deniega
+  (`YA_REGISTRADO`). Señalado al equipo por si se quiere otro comportamiento.
+- **Endpoint sin auth de usuario** (guard de dispositivo, como el kiosko): puede
+  crear filas `usuarios` de invitado desde el kiosko. Mismo modelo de confianza
+  que el check-in del kiosko; RN-03 sigue aplicando.

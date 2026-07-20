@@ -437,3 +437,63 @@ def test_administrador_no_necesita_gestionar_usuarios_explicito(db):
         "/usuarios", json={"cedula": "1", "nombre": "X", "rol": "miembro"}, headers=_headers(token)
     )
     assert resp.status_code == 201
+
+
+# --- 008: GET /usuarios/buscar ---
+
+
+def _crear_miembro(db, token: str, cedula: str, nombre: str) -> None:
+    resp = client.post(
+        "/usuarios",
+        json={"cedula": cedula, "nombre": nombre, "rol": "miembro"},
+        headers=_headers(token),
+    )
+    assert resp.status_code == 201
+
+
+def test_buscar_sin_token_401(db):
+    assert client.get("/usuarios/buscar", params={"q": "Laura"}).status_code == 401
+
+
+def test_buscar_sin_gestionar_usuarios_403(db):
+    token = _token_empleado_sin_gestionar_usuarios(db)
+    resp = client.get("/usuarios/buscar", params={"q": "Laura"}, headers=_headers(token))
+    assert resp.status_code == 403
+
+
+def test_buscar_por_nombre_parcial_200(db):
+    token = _token_empleado(db)
+    _crear_miembro(db, token, "555444333", "Laura Gómez")
+    _crear_miembro(db, token, "987654321", "Carlos Pérez")
+    resp = client.get("/usuarios/buscar", params={"q": "lau"}, headers=_headers(token))
+    assert resp.status_code == 200
+    assert [u["nombre"] for u in resp.json()] == ["Laura Gómez"]
+
+
+def test_buscar_por_cedula_parcial_200(db):
+    token = _token_empleado(db)
+    _crear_miembro(db, token, "555444333", "Laura Gómez")
+    resp = client.get("/usuarios/buscar", params={"q": "4443"}, headers=_headers(token))
+    assert resp.status_code == 200
+    assert [u["cedula"] for u in resp.json()] == ["555444333"]
+
+
+def test_buscar_no_expone_password_hash(db):
+    token = _token_empleado(db)
+    _crear_miembro(db, token, "555444333", "Laura Gómez")
+    resp = client.get("/usuarios/buscar", params={"q": "Laura"}, headers=_headers(token))
+    assert "password_hash" not in resp.json()[0]
+
+
+def test_buscar_sin_parametro_q_422(db):
+    token = _token_empleado(db)
+    assert client.get("/usuarios/buscar", headers=_headers(token)).status_code == 422
+
+
+def test_buscar_no_colisiona_con_get_usuario_por_id(db):
+    """La ruta /buscar va declarada antes de /{user_id}; si se invirtiera el
+    orden, FastAPI intentaría parsear "buscar" como int y daría 422."""
+    token = _token_empleado(db)
+    resp = client.get("/usuarios/buscar", params={"q": "x"}, headers=_headers(token))
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)

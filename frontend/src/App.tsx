@@ -5,6 +5,7 @@ import { MemberAuthProvider } from './context/MemberAuthContext';
 import CheckinKiosk from './components/CheckinKiosk';
 import Home from './components/Home';
 import AttendanceReportPage from './components/backoffice/AttendanceReportPage';
+import CortesiaPage from './components/backoffice/CortesiaPage';
 import DispositivosBloqueados from './components/backoffice/DispositivosBloqueados';
 import LoginForm from './components/backoffice/LoginForm';
 import MembershipTypesPage from './components/backoffice/MembershipTypesPage';
@@ -28,6 +29,7 @@ function App() {
         <Route element={<StaffLayout />}>
           <Route path="/staff/home" element={<StaffHome />} />
           <Route path="/staff/usuarios" element={<UsersPage />} />
+          <Route path="/staff/cortesia" element={<CortesiaPage />} />
           <Route path="/staff/tipos-membresia" element={<MembershipTypesPage />} />
           <Route path="/staff/reportes" element={<AttendanceReportPage />} />
           <Route path="/staff/permisos" element={<PermissionsPage />} />

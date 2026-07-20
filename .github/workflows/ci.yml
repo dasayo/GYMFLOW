@@ -99,7 +99,15 @@ jobs:
           fi
 
       - name: Verificar que el frontend responde
-        run: docker compose exec -T frontend wget -q -O /dev/null http://localhost/
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose exec -T frontend wget -q -O /dev/null http://localhost/; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs frontend
+          exit 1
 
       - name: Logs (si algo falló arriba, quedan visibles antes de terminar)
         if: always()

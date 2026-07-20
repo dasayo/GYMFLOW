@@ -2,7 +2,7 @@
 Router de members (spec/features/004-gestion-usuarios). Validación de entrada
 con Pydantic (members/schemas.py), nunca a mano aquí (AGENTS.md).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 import auth.service as auth_service
@@ -75,6 +75,21 @@ def post_usuario(
 @router.get("", response_model=list[UserOut])
 def get_usuarios(db: Session = Depends(get_db), _staff=_GESTIONAR_USUARIOS) -> list[UserOut]:
     return [UserOut.model_validate(u) for u in members_service.list_users(db)]
+
+
+# OJO: esta ruta va declarada ANTES de "/{user_id}". FastAPI resuelve por
+# orden de declaración, así que si estuviera después, "buscar" se intentaría
+# parsear como `user_id: int` y el endpoint respondería 422.
+@router.get("/buscar", response_model=list[UserOut])
+def get_buscar_usuarios(
+    q: str = Query(..., max_length=150),
+    db: Session = Depends(get_db),
+    _staff=_GESTIONAR_USUARIOS,
+) -> list[UserOut]:
+    """008: búsqueda por coincidencia parcial de nombre O cédula en un solo
+    campo. Gateada con el mismo permiso que el listado porque devuelve los
+    mismos datos (decisión del equipo)."""
+    return [UserOut.model_validate(u) for u in members_service.search_users(q, db)]
 
 
 @router.get("/{user_id}", response_model=UserOut)

@@ -12,7 +12,12 @@ from sqlalchemy.orm import sessionmaker
 
 from checkin.repository import CheckinDeviceLockRepository
 from checkin.schemas import CheckinResultado, RazonDenegacion
-from checkin.service import checkin_member, get_member_attendance_consistency
+from checkin.service import (
+    checkin_guest,
+    checkin_member,
+    first_day_courtesy,
+    get_member_attendance_consistency,
+)
 from core.config import now as _now, settings
 from membership.service import hoy
 from core.database import engine
@@ -23,6 +28,7 @@ from models import (
     EstadoUsuario,
     Membership,
     MembershipType,
+    ResultadoCheckin,
     RolUsuario,
     User,
 )
@@ -292,3 +298,204 @@ def test_diez_checkins_concurrentes_no_descuentan_de_mas(db):
         .count()
     )
     assert activos == 1
+
+
+# --- 005: cortesía de primer día (flujo de Staff) ---
+
+
+def test_cortesia_crea_prospecto_y_checkin_exitoso(db):
+    """Criterio 1: cédula no registrada → User Prospecto + CheckIn Exitoso."""
+    resultado, mensaje, nombre, visitas, razon = first_day_courtesy("900111222", "Nuevo Prospecto", db)
+
+    assert resultado == CheckinResultado.exitoso
+    assert razon is None
+    assert nombre == "Nuevo Prospecto"
+
+    prospecto = db.query(User).filter(User.cedula == "900111222").one()
+    assert prospecto.rol == RolUsuario.invitado
+    assert prospecto.cortesia_usada is True
+    assert prospecto.estado == EstadoUsuario.activo
+
+    checkins = db.query(CheckIn).filter(CheckIn.usuario_id == prospecto.id).all()
+    assert len(checkins) == 1
+    assert checkins[0].resultado == ResultadoCheckin.exitoso
+    assert checkins[0].is_active is True
+
+
+def test_cortesia_es_atomica_prospecto_y_checkin_juntos(db):
+    """RN-10: tras la cortesía existen el prospecto Y su CheckIn, ambos
+    commiteados en la misma transacción (verificado desde otra sesión)."""
+    first_day_courtesy("900111333", "Atómico", db)
+
+    Session = sessionmaker(bind=engine)
+    otra = Session()
+    try:
+        prospecto = otra.query(User).filter(User.cedula == "900111333").one()
+        assert otra.query(CheckIn).filter(CheckIn.usuario_id == prospecto.id).count() == 1
+    finally:
+        otra.close()
+
+
+def test_cortesia_segundo_intento_denegado_y_registrado(db):
+    """Criterio 3: una cédula que YA usó cortesía → denegado + CheckIn de
+    denegación con motivo CORTESIA_YA_UTILIZADA, sin crear otro usuario."""
+    first_day_courtesy("900111444", "Repite", db)
+    resultado, mensaje, nombre, visitas, razon = first_day_courtesy("900111444", "Repite", db)
+
+    assert resultado == CheckinResultado.denegado
+    assert razon == RazonDenegacion.cortesia_ya_utilizada
+
+    # Sigue existiendo un solo usuario con esa cédula.
+    assert db.query(User).filter(User.cedula == "900111444").count() == 1
+    prospecto = db.query(User).filter(User.cedula == "900111444").one()
+    resultados = [c.resultado for c in db.query(CheckIn).filter(CheckIn.usuario_id == prospecto.id).all()]
+    assert resultados.count(ResultadoCheckin.exitoso) == 1
+    assert resultados.count(ResultadoCheckin.denegado) == 1
+
+
+def test_cortesia_a_usuario_ya_registrado_denegada_sin_checkin(db):
+    """Un socio real (registrado, sin cortesía usada) no es un prospecto: la
+    cortesía no aplica y no se persiste ningún CheckIn."""
+    socio, _ = _crear_socio(db)  # cédula 1000000001, rol miembro
+    resultado, mensaje, nombre, visitas, razon = first_day_courtesy(socio.cedula, "X", db)
+
+    assert resultado == CheckinResultado.denegado
+    assert razon == RazonDenegacion.ya_registrado
+    assert db.query(CheckIn).filter(CheckIn.usuario_id == socio.id).count() == 0
+
+
+def test_cortesia_no_descuenta_ni_crea_membresia(db):
+    """El prospecto no tiene membresía; la cortesía no toca visitas."""
+    first_day_courtesy("900111555", "Sin Membresía", db)
+    prospecto = db.query(User).filter(User.cedula == "900111555").one()
+    assert db.query(Membership).filter(Membership.miembro_id == prospecto.id).count() == 0
+
+
+# --- 006: check-in de invitado (titular presente, sin ventana) ---
+
+
+def _set_cupo(db, membership, cupo):
+    membership.cupo_invitados_restantes = cupo
+    db.commit()
+
+
+def test_checkin_guest_exitoso_descuenta_un_cupo(db):
+    """Criterio 1: titular con cupo → invitado Exitoso, se descuenta 1 cupo y
+    se registra CheckIn(usuario_id=invitado, titular_id=titular)."""
+    titular, membership = _crear_socio(db)
+    _set_cupo(db, membership, 2)
+
+    resultado, mensaje, nombre, visitas, razon = checkin_guest(
+        titular.cedula, "700000001", "Invitada Uno", db
+    )
+
+    assert resultado == CheckinResultado.exitoso
+    assert razon is None
+    assert nombre == "Invitada Uno"
+    assert "1 invitaciones restantes" in mensaje  # 2 - 1 = 1
+
+    db.refresh(membership)
+    assert membership.cupo_invitados_restantes == 1
+
+    invitado = db.query(User).filter(User.cedula == "700000001").one()
+    assert invitado.rol == RolUsuario.invitado
+    checkin = db.query(CheckIn).filter(CheckIn.usuario_id == invitado.id).one()
+    assert checkin.resultado == ResultadoCheckin.exitoso
+    assert checkin.titular_id == titular.id
+    assert checkin.is_active is True
+
+
+def test_checkin_guest_atomico(db):
+    """RN-10: descuento del cupo y CheckIn commiteados juntos (verificado desde
+    otra sesión)."""
+    titular, membership = _crear_socio(db)
+    _set_cupo(db, membership, 1)
+
+    checkin_guest(titular.cedula, "700000002", "Invitada Dos", db)
+
+    Session = sessionmaker(bind=engine)
+    otra = Session()
+    try:
+        m = otra.query(Membership).filter(Membership.id == membership.id).one()
+        assert m.cupo_invitados_restantes == 0
+        invitado = otra.query(User).filter(User.cedula == "700000002").one()
+        assert otra.query(CheckIn).filter(CheckIn.usuario_id == invitado.id).count() == 1
+    finally:
+        otra.close()
+
+
+def test_checkin_guest_sin_cupo_denegado_sin_descontar(db):
+    """Criterio 5: cupo_invitados_restantes = 0 → Denegado, sin tocar nada."""
+    titular, membership = _crear_socio(db)
+    _set_cupo(db, membership, 0)
+
+    resultado, mensaje, nombre, visitas, razon = checkin_guest(
+        titular.cedula, "700000003", "Invitada Tres", db
+    )
+
+    assert resultado == CheckinResultado.denegado
+    assert razon == RazonDenegacion.sin_cupo_invitados
+    db.refresh(membership)
+    assert membership.cupo_invitados_restantes == 0
+    assert db.query(User).filter(User.cedula == "700000003").count() == 0
+    assert db.query(CheckIn).count() == 0
+
+
+def test_checkin_guest_titular_vencido_denegado(db):
+    """Criterio 5: titular con membresía vencida → Denegado."""
+    titular, membership = _crear_socio(db, dias_vencimiento=-1)
+    _set_cupo(db, membership, 5)
+
+    resultado, mensaje, nombre, visitas, razon = checkin_guest(
+        titular.cedula, "700000004", "Invitada Cuatro", db
+    )
+
+    assert resultado == CheckinResultado.denegado
+    assert razon == RazonDenegacion.titular_sin_membresia
+    db.refresh(membership)
+    assert membership.cupo_invitados_restantes == 5
+
+
+def test_checkin_guest_titular_no_encontrado(db):
+    resultado, mensaje, nombre, visitas, razon = checkin_guest(
+        "999888777", "700000005", "Invitada Cinco", db
+    )
+    assert resultado == CheckinResultado.denegado
+    assert razon == RazonDenegacion.titular_no_encontrado
+
+
+def test_checkin_guest_titular_sin_visitas_pero_con_cupo_ok(db):
+    """El invitado descuenta cupo_invitados, NO las visitas del titular: un
+    titular con 0 visitas propias pero con cupo SÍ puede avalar un invitado."""
+    titular, membership = _crear_socio(db, visitas_restantes=0)
+    _set_cupo(db, membership, 1)
+
+    resultado, mensaje, nombre, visitas, razon = checkin_guest(
+        titular.cedula, "700000006", "Invitada Seis", db
+    )
+
+    assert resultado == CheckinResultado.exitoso
+    db.refresh(membership)
+    assert membership.cupo_invitados_restantes == 0
+    assert membership.visitas_restantes == 0  # intactas
+
+
+def test_checkin_guest_reingreso_mismo_dia_no_descuenta_doble(db):
+    """El mismo invitado dos veces el mismo día → segundo es éxito idempotente
+    sin volver a descontar cupo (análogo al Filtro 1 de 001)."""
+    titular, membership = _crear_socio(db)
+    _set_cupo(db, membership, 2)
+
+    checkin_guest(titular.cedula, "700000007", "Invitada Siete", db)
+    resultado, mensaje, _, _, _ = checkin_guest(titular.cedula, "700000007", "Invitada Siete", db)
+
+    assert resultado == CheckinResultado.exitoso
+    assert "ya había ingresado hoy" in mensaje
+    db.refresh(membership)
+    assert membership.cupo_invitados_restantes == 1  # descontado solo una vez
+
+    invitado = db.query(User).filter(User.cedula == "700000007").one()
+    activos = db.query(CheckIn).filter(
+        CheckIn.usuario_id == invitado.id, CheckIn.is_active.is_(True)
+    ).all()
+    assert len(activos) == 1

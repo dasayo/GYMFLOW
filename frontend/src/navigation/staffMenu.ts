@@ -23,6 +23,13 @@ export const STAFF_MENU_ITEMS: StaffMenuItem[] = [
     permission: 'members.gestionar_usuarios',
   },
   {
+    label: 'Cortesía de primer día',
+    description: 'Registrar el acceso gratuito único de un prospecto nuevo.',
+    path: '/staff/cortesia',
+    icon: '🎟️',
+    permission: 'members.gestionar_usuarios',
+  },
+  {
     label: 'Tipos de membresía',
     description: 'Crear, editar, activar/desactivar y eliminar planes de membresía.',
     path: '/staff/tipos-membresia',

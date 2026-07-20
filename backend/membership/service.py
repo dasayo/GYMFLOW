@@ -234,6 +234,27 @@ def consume_visit(membership_id: int, db: Session) -> Membership:
     return membership
 
 
+def get_membership_for_guest(titular_id: int, db: Session) -> Membership | None:
+    """006: membresía del titular que puede avalar a un invitado — activa, en
+    ventana de fechas y NO vencida. A diferencia de `get_active_membership`,
+    NO exige `visitas_restantes > 0`: el invitado descuenta `cupo_invitados`,
+    no las visitas del titular (RN-04). El cupo se valida aparte para poder
+    distinguir la razón de la denegación."""
+    membership = MembershipRepository(db).get_active_by_user(titular_id, hoy())
+    if membership is None or membership.fecha_vencimiento < hoy():
+        return None
+    return membership
+
+
+def consume_guest_slot(membership_id: int, db: Session) -> Membership:
+    """RN-09: descuenta exactamente 1 cupo de invitado. `SELECT ... FOR UPDATE`
+    serializa descuentos concurrentes (evita descontar el mismo cupo dos veces).
+    No hace commit — el orquestador (checkin.service) confirma la transacción."""
+    membership = MembershipRepository(db).get_for_update(membership_id)
+    membership.cupo_invitados_restantes -= 1
+    return membership
+
+
 def get_membership_summary(user_id: int, db: Session) -> MembershipSummary | None:
     """Mínimo del semáforo reutilizado por checkin (001) y resumen (007)."""
     membership = MembershipRepository(db).get_active_by_user(user_id, hoy())

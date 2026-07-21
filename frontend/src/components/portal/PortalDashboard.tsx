@@ -159,6 +159,15 @@ function PortalDashboard() {
           <>
             <AvisoVencimiento resumen={resumen} />
 
+            <button
+              type="button"
+              onClick={() => navigate('/portal/escaner')}
+              className="w-full min-h-[56px] mb-6 bg-member-navy text-white rounded-card flex items-center justify-center gap-2 text-lg font-semibold"
+            >
+              <span aria-hidden="true">📷</span>
+              Escanear pase de acceso
+            </button>
+
             <section className="bg-white rounded-card shadow-sm border border-gray-100 p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-member-navy-text font-semibold">Mi membresía</h2>

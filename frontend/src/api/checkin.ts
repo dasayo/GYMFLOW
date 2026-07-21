@@ -32,17 +32,38 @@ export class DispositivoBloqueadoError extends Error {
   }
 }
 
+/** 012-checkin-qr-dinamico: el `X-Device-Id` de este navegador no está en la
+ *  lista blanca — un admin debe autorizarlo desde `/staff/dispositivos-autorizados`. */
+export class DispositivoNoAutorizadoError extends Error {}
+
 const DEVICE_ID_KEY = 'gymflow-kiosko-device-id';
 
-// Id estable del kiosko (RN-03, 002-acceso-denegado) — persistido en
-// localStorage para que sobreviva a recargas de página.
-function getDeviceId(): string {
+// Id estable del kiosko (RN-03, 002-acceso-denegado; también identidad para
+// la lista blanca de 012-checkin-qr-dinamico) — persistido en localStorage
+// para que sobreviva a recargas de página.
+export function getDeviceId(): string {
   let deviceId = localStorage.getItem(DEVICE_ID_KEY);
   if (!deviceId) {
     deviceId = crypto.randomUUID();
     localStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
   return deviceId;
+}
+
+function relanzarErrorDeDispositivo(error: unknown): never {
+  if (isAxiosError(error) && error.response?.status === 423) {
+    const detail = error.response.data?.detail as
+      | { mensaje?: string; bloqueado_hasta?: string }
+      | undefined;
+    throw new DispositivoBloqueadoError(
+      detail?.mensaje ?? 'Dispositivo bloqueado temporalmente.',
+      detail?.bloqueado_hasta ? new Date(detail.bloqueado_hasta) : null,
+    );
+  }
+  if (isAxiosError(error) && error.response?.status === 403) {
+    throw new DispositivoNoAutorizadoError();
+  }
+  throw error;
 }
 
 export async function postCheckin(cedula: string): Promise<CheckinResponse> {
@@ -54,16 +75,29 @@ export async function postCheckin(cedula: string): Promise<CheckinResponse> {
     );
     return data;
   } catch (error) {
-    if (isAxiosError(error) && error.response?.status === 423) {
-      const detail = error.response.data?.detail as
-        | { mensaje?: string; bloqueado_hasta?: string }
-        | undefined;
-      throw new DispositivoBloqueadoError(
-        detail?.mensaje ?? 'Dispositivo bloqueado temporalmente.',
-        detail?.bloqueado_hasta ? new Date(detail.bloqueado_hasta) : null,
-      );
-    }
-    throw error;
+    relanzarErrorDeDispositivo(error);
+  }
+}
+
+export interface QrNonce {
+  nonce: string;
+  expira_en: string;
+}
+
+/** 012-checkin-qr-dinamico: pide el siguiente nonce del QR del kiosko. La
+ *  rotación posterior llega por WebSocket (`/api/checkin/ws/{deviceId}`),
+ *  esto solo se usa para el primer nonce y para recuperarse si el socket
+ *  se cae. */
+export async function postQrNonce(): Promise<QrNonce> {
+  try {
+    const { data } = await apiClient.post<QrNonce>(
+      '/checkin/qr/nonce',
+      null,
+      { headers: { 'X-Device-Id': getDeviceId() } },
+    );
+    return data;
+  } catch (error) {
+    relanzarErrorDeDispositivo(error);
   }
 }
 
@@ -101,16 +135,7 @@ export async function checkinGuest(input: GuestCheckinInput): Promise<CheckinRes
     );
     return data;
   } catch (error) {
-    if (isAxiosError(error) && error.response?.status === 423) {
-      const detail = error.response.data?.detail as
-        | { mensaje?: string; bloqueado_hasta?: string }
-        | undefined;
-      throw new DispositivoBloqueadoError(
-        detail?.mensaje ?? 'Dispositivo bloqueado temporalmente.',
-        detail?.bloqueado_hasta ? new Date(detail.bloqueado_hasta) : null,
-      );
-    }
-    throw error;
+    relanzarErrorDeDispositivo(error);
   }
 }
 
@@ -130,6 +155,38 @@ export async function getDispositivosBloqueados(): Promise<DispositivoBloqueadoI
 export async function desbloquearDispositivo(deviceId: string): Promise<{ mensaje: string }> {
   const { data } = await apiClient.post<{ mensaje: string }>(
     `/checkin/desbloquear/${deviceId}`,
+  );
+  return data;
+}
+
+export interface DispositivoAutorizadoInfo {
+  device_id: string;
+  etiqueta: string | null;
+  autorizado_en: string;
+}
+
+/** 012-checkin-qr-dinamico: lista blanca de kioscos que pueden usar /kiosko. */
+export async function getDispositivosAutorizados(): Promise<DispositivoAutorizadoInfo[]> {
+  const { data } = await apiClient.get<DispositivoAutorizadoInfo[]>(
+    '/checkin/dispositivos/autorizados',
+  );
+  return data;
+}
+
+export async function autorizarDispositivo(
+  deviceId: string,
+  etiqueta?: string,
+): Promise<{ mensaje: string }> {
+  const { data } = await apiClient.post<{ mensaje: string }>('/checkin/dispositivos/autorizar', {
+    device_id: deviceId,
+    etiqueta: etiqueta || null,
+  });
+  return data;
+}
+
+export async function revocarDispositivo(deviceId: string): Promise<{ mensaje: string }> {
+  const { data } = await apiClient.delete<{ mensaje: string }>(
+    `/checkin/dispositivos/autorizar/${deviceId}`,
   );
   return data;
 }

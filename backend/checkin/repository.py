@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from models import CheckIn, CheckinDeviceLock
+from models import CheckIn, CheckinDeviceLock, CheckinQrNonce, DispositivoAutorizado
 
 VENTANA_INTENTOS = timedelta(minutes=5)
 DURACION_BLOQUEO = timedelta(minutes=20)
@@ -143,3 +143,86 @@ class CheckinDeviceLockRepository:
             .filter(CheckinDeviceLock.bloqueado_hasta > momento)
             .all()
         )
+
+
+class CheckinQrNonceRepository:
+    """012-checkin-qr-dinamico: nonces del QR del kiosko en tabla (no en
+    memoria), mismo criterio que `CheckinDeviceLockRepository`."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(
+        self, device_id: str, nonce: str, creado_en: datetime, expira_en: datetime
+    ) -> CheckinQrNonce:
+        fila = CheckinQrNonce(
+            device_id=device_id, nonce=nonce, creado_en=creado_en, expira_en=expira_en
+        )
+        self.db.add(fila)
+        self.db.flush()
+        return fila
+
+    def get_vigente(self, device_id: str, nonce: str, momento: datetime) -> CheckinQrNonce | None:
+        """Nonce válido para consumir: mismo dispositivo, no usado, no
+        expirado. `with_for_update` evita que dos escaneos concurrentes del
+        mismo nonce (poco probable, pero posible) lo consuman dos veces."""
+        return (
+            self.db.query(CheckinQrNonce)
+            .filter(
+                CheckinQrNonce.device_id == device_id,
+                CheckinQrNonce.nonce == nonce,
+                CheckinQrNonce.usado_en.is_(None),
+                CheckinQrNonce.expira_en > momento,
+            )
+            .with_for_update()
+            .first()
+        )
+
+    def mark_used(self, nonce: CheckinQrNonce, momento: datetime) -> None:
+        nonce.usado_en = momento
+        self.db.flush()
+
+
+class DispositivoAutorizadoRepository:
+    """012-checkin-qr-dinamico: lista blanca de kioscos autorizados por Staff."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def is_authorized(self, device_id: str) -> bool:
+        return (
+            self.db.query(DispositivoAutorizado)
+            .filter(DispositivoAutorizado.device_id == device_id)
+            .first()
+            is not None
+        )
+
+    def authorize(
+        self, device_id: str, etiqueta: str | None, autorizado_por_id: int, momento: datetime
+    ) -> DispositivoAutorizado:
+        fila = (
+            self.db.query(DispositivoAutorizado)
+            .filter(DispositivoAutorizado.device_id == device_id)
+            .first()
+        )
+        if fila is None:
+            fila = DispositivoAutorizado(device_id=device_id)
+            self.db.add(fila)
+        fila.etiqueta = etiqueta
+        fila.autorizado_en = momento
+        fila.autorizado_por_id = autorizado_por_id
+        self.db.flush()
+        return fila
+
+    def list_authorized(self) -> list[DispositivoAutorizado]:
+        return (
+            self.db.query(DispositivoAutorizado)
+            .order_by(DispositivoAutorizado.autorizado_en.desc())
+            .all()
+        )
+
+    def revoke(self, device_id: str) -> None:
+        self.db.query(DispositivoAutorizado).filter(
+            DispositivoAutorizado.device_id == device_id
+        ).delete()
+        self.db.flush()

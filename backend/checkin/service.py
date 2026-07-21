@@ -10,6 +10,7 @@ entrada que otros módulos pueden llamar para leer/mutar datos de checkin.
 Ningún otro módulo debe importar checkin/repository.py directamente.
 """
 import re
+import secrets
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -18,15 +19,26 @@ from sqlalchemy.orm import Session
 
 import membership.service as membership_service
 import members.service as members_service
-from checkin.repository import CheckinDeviceLockRepository, CheckinRepository
+from checkin.repository import (
+    CheckinDeviceLockRepository,
+    CheckinQrNonceRepository,
+    CheckinRepository,
+    DispositivoAutorizadoRepository,
+)
 from checkin.schemas import AttendanceConsistencyOut, AttendancePointOut, CheckinResultado, RazonDenegacion
 from core.config import now as _now, settings
 from membership.schemas import MembershipSummary
-from models import CheckIn, ResultadoCheckin
+from models import CheckIn, CheckinQrNonce, ResultadoCheckin
 
 # HU-02 (decisión provisional, no confirmada con equipo/profesora):
 # solo dígitos, 5 a 15 caracteres — permisivo con cédulas de varios países.
 _CEDULA_VALIDA = re.compile(r"^\d{5,15}$")
+
+
+class NonceInvalidoError(Exception):
+    """012-checkin-qr-dinamico: el nonce no existe, ya fue usado o expiró —
+    se trata como un solo caso (HU-02, mismo criterio de no distinguir
+    motivos que puedan ayudar a alguien a tantear el sistema)."""
 
 
 class UsuarioNoEncontradoError(Exception):
@@ -70,6 +82,85 @@ def checkin_member(
     if user is None:
         raise UsuarioNoEncontradoError(cedula)
 
+    return _checkin_for_user(user, device_id, db)
+
+
+def checkin_member_qr(
+    user_id: int, device_id: str, db: Session
+) -> tuple[CheckinResultado, str, str | None, int | None, RazonDenegacion | None]:
+    """Check-in identificando al socio por su sesión del portal (`sub` del
+    JWT), no por cédula (012-checkin-qr-dinamico). El nonce ya se validó y
+    marcó usado en :func:`checkin_via_qr`; esto solo resuelve al usuario y
+    corre el mismo motor de :func:`checkin_member`.
+
+    Raises:
+        members.service.UsuarioNoEncontradoError: si el `sub` del token ya
+            no corresponde a ningún usuario (cuenta borrada).
+    """
+    user = members_service.get_user(user_id, db)
+    return _checkin_for_user(user, device_id, db)
+
+
+def checkin_via_qr(
+    user_id: int, device_id: str, nonce: str, db: Session
+) -> tuple[CheckinResultado, str, str | None, int | None, RazonDenegacion | None]:
+    """Valida el nonce escaneado por el socio y, si sigue vigente, corre el
+    check-in (012-checkin-qr-dinamico).
+
+    Raises:
+        NonceInvalidoError: si el nonce no existe, ya se usó o expiró.
+    """
+    nonce_repo = CheckinQrNonceRepository(db)
+    momento = _now()
+    fila = nonce_repo.get_vigente(device_id, nonce, momento)
+    if fila is None:
+        raise NonceInvalidoError()
+    nonce_repo.mark_used(fila, momento)
+    return checkin_member_qr(user_id, device_id, db)
+
+
+def generar_qr_nonce(device_id: str, db: Session) -> CheckinQrNonce:
+    """Genera y persiste el siguiente nonce del QR de un kiosko
+    (012-checkin-qr-dinamico). `token_urlsafe` (criptográficamente seguro,
+    no adivinable) — no hace falta cuidar colisiones, la columna es única."""
+    momento = _now()
+    nonce = secrets.token_urlsafe(16)
+    fila = CheckinQrNonceRepository(db).create(
+        device_id, nonce, momento, momento + timedelta(seconds=settings.qr_nonce_seconds)
+    )
+    db.commit()
+    return fila
+
+
+def dispositivo_autorizado(device_id: str, db: Session) -> bool:
+    return DispositivoAutorizadoRepository(db).is_authorized(device_id)
+
+
+def autorizar_dispositivo(
+    device_id: str, etiqueta: str | None, autorizado_por_id: int, db: Session
+) -> None:
+    DispositivoAutorizadoRepository(db).authorize(device_id, etiqueta, autorizado_por_id, _now())
+    db.commit()
+
+
+def listar_dispositivos_autorizados(db: Session):
+    return DispositivoAutorizadoRepository(db).list_authorized()
+
+
+def revocar_dispositivo(device_id: str, db: Session) -> None:
+    DispositivoAutorizadoRepository(db).revoke(device_id)
+    db.commit()
+
+
+def _checkin_for_user(
+    user, device_id: str, db: Session
+) -> tuple[CheckinResultado, str, str | None, int | None, RazonDenegacion | None]:
+    """Núcleo del motor de validación (RN-01/RN-02/RN-08/RN-10), compartido
+    por :func:`checkin_member` (identificación por cédula) y
+    :func:`checkin_member_qr` (identificación por sesión + QR,
+    012-checkin-qr-dinamico) — la única diferencia entre ambos caminos es
+    cómo se resuelve `user`, nunca las reglas de negocio."""
+    lock_repo = CheckinDeviceLockRepository(db)
     repo = CheckinRepository(db)
     hoy = membership_service.hoy()
 

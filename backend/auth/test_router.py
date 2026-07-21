@@ -6,6 +6,7 @@ HU-10 — Autenticación segura.
 from fastapi.testclient import TestClient
 
 from auth.conftest import PASSWORD, otorgar_permiso
+from checkin.conftest import autorizar_dispositivo
 from core.security import create_access_token, decode_access_token
 from main import app
 
@@ -122,6 +123,7 @@ def test_token_expirado_devuelve_401(db, empleado):
 def test_kiosko_checkin_funciona_sin_authorization_header(db):
     # Cédula con formato válido (5-15 dígitos) pero sin usuario registrado ->
     # 404 (UsuarioNoEncontradoError), no 401: el kiosko nunca exige JWT.
+    autorizar_dispositivo(db, "kiosko-test-auth")
     resp = client.post(
         "/checkin", json={"cedula": "99999999"}, headers={"X-Device-Id": "kiosko-test-auth"}
     )

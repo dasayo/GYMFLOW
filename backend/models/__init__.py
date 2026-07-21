@@ -8,6 +8,8 @@ from models.membership_type import MembershipType
 from models.membership import Membership, EstadoMembresia
 from models.checkin import CheckIn, ResultadoCheckin
 from models.checkin_device_lock import CheckinDeviceLock
+from models.checkin_qr_nonce import CheckinQrNonce
+from models.dispositivo_autorizado import DispositivoAutorizado
 from models.guest import Guest
 from models.permiso import Permiso, usuario_permisos
 from models.refresh_token import RefreshToken
@@ -22,6 +24,8 @@ __all__ = [
     "CheckIn",
     "ResultadoCheckin",
     "CheckinDeviceLock",
+    "CheckinQrNonce",
+    "DispositivoAutorizado",
     "Guest",
     "Permiso",
     "usuario_permisos",

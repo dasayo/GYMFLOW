@@ -1,5 +1,7 @@
 import axios, { isAxiosError, type InternalAxiosRequestConfig } from 'axios';
 
+import type { CheckinResponse } from './checkin';
+
 // Sesión del Miembro (RF-02/RF-04): el access token vive SOLO en memoria (nunca
 // localStorage — decisión de seguridad del equipo, cookie httpOnly para el
 // refresh). Al recargar la página se recupera con un refresh silencioso.
@@ -121,6 +123,17 @@ export async function getAttendanceConsistency(
 ): Promise<AttendanceConsistency> {
   const { data } = await portalClient.get<AttendanceConsistency>('/checkin/me/constancia', {
     params: { period },
+  });
+  return data;
+}
+
+/** 012-checkin-qr-dinamico: el socio escanea el QR del kiosko desde el
+ *  portal (ya logueado) — usa `portalClient` (Bearer + refresh automático),
+ *  no el cliente de staff. */
+export async function postEscanearQr(deviceId: string, nonce: string): Promise<CheckinResponse> {
+  const { data } = await portalClient.post<CheckinResponse>('/checkin/qr/scan', {
+    device_id: deviceId,
+    nonce,
   });
   return data;
 }

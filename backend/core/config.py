@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # ventanas temporales (RN-04). Centralizada aquí para toda la app.
     timezone: str = "America/Bogota"
     environment: str = "development"
+    # Vigencia del QR del kiosko antes de rotar (012-checkin-qr-dinamico):
+    # suficiente para que el socio alcance a escanear, corto para minimizar
+    # la ventana de reuso si alguien lo captura con foto.
+    qr_nonce_seconds: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

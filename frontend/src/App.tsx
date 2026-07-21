@@ -6,6 +6,7 @@ import CheckinKiosk from './components/CheckinKiosk';
 import NotFound from './components/NotFound';
 import AttendanceReportPage from './components/backoffice/AttendanceReportPage';
 import CortesiaPage from './components/backoffice/CortesiaPage';
+import DispositivosAutorizadosPage from './components/backoffice/DispositivosAutorizadosPage';
 import DispositivosBloqueados from './components/backoffice/DispositivosBloqueados';
 import LoginForm from './components/backoffice/LoginForm';
 import MembershipTypesPage from './components/backoffice/MembershipTypesPage';
@@ -14,6 +15,7 @@ import ProtectedRoute from './components/backoffice/ProtectedRoute';
 import StaffHome from './components/backoffice/StaffHome';
 import StaffLayout from './components/backoffice/StaffLayout';
 import UsersPage from './components/backoffice/UsersPage';
+import MemberScanner from './components/portal/MemberScanner';
 import PortalActivate from './components/portal/PortalActivate';
 import PortalDashboard from './components/portal/PortalDashboard';
 import PortalLogin from './components/portal/PortalLogin';
@@ -33,6 +35,7 @@ function App() {
           <Route path="/staff/reportes" element={<AttendanceReportPage />} />
           <Route path="/staff/permisos" element={<PermissionsPage />} />
           <Route path="/staff/dispositivos-bloqueados" element={<DispositivosBloqueados />} />
+          <Route path="/staff/dispositivos-autorizados" element={<DispositivosAutorizadosPage />} />
         </Route>
       </Route>
       {/* El provider del Miembro solo envuelve la raíz y /portal/*: intenta
@@ -50,6 +53,7 @@ function App() {
         <Route path="/portal/activar" element={<PortalActivate />} />
         <Route element={<PortalProtectedRoute />}>
           <Route path="/" element={<PortalDashboard />} />
+          <Route path="/portal/escaner" element={<MemberScanner />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFound />} />

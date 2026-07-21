@@ -12,6 +12,8 @@ from core.database import engine
 _TABLAS_DE_TEST = (
     "checkins",
     "checkin_device_locks",
+    "checkin_qr_nonces",
+    "dispositivos_autorizados",
     "membresias",
     "refresh_tokens",
     "usuarios",

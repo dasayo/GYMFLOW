@@ -133,3 +133,31 @@ class DispositivoBloqueadoInfo(BaseModel):
     bloqueado_hasta: datetime
 
     model_config = {"from_attributes": True}
+
+
+class QrNonceOut(BaseModel):
+    """012-checkin-qr-dinamico: el kiosko codifica esto en el QR que muestra."""
+
+    nonce: str
+    expira_en: datetime
+
+
+class QrScanRequest(BaseModel):
+    """012-checkin-qr-dinamico: lo que el portal manda al escanear el QR del
+    kiosko — decodificado del propio QR, no lo escribe el socio a mano."""
+
+    device_id: str
+    nonce: str
+
+
+class DispositivoAutorizarRequest(BaseModel):
+    device_id: str
+    etiqueta: str | None = None
+
+
+class DispositivoAutorizadoInfo(BaseModel):
+    device_id: str
+    etiqueta: str | None
+    autorizado_en: datetime
+
+    model_config = {"from_attributes": True}

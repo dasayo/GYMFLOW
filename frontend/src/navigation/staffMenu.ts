@@ -57,4 +57,11 @@ export const STAFF_MENU_ITEMS: StaffMenuItem[] = [
     icon: '🔒',
     permission: 'checkin.ver_dispositivos_bloqueados',
   },
+  {
+    label: 'Dispositivos autorizados',
+    description: 'Autorizar o revocar qué kioscos pueden mostrar /kiosko.',
+    path: '/staff/dispositivos-autorizados',
+    icon: '✅',
+    permission: 'checkin.autorizar_dispositivo',
+  },
 ];

@@ -1,38 +1,56 @@
 import { isAxiosError } from 'axios';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { DispositivoBloqueadoError, postCheckin, type CheckinResponse } from '../api/checkin';
+import {
+  DispositivoBloqueadoError,
+  checkinGuest,
+  postCheckin,
+  type CheckinResponse,
+} from '../api/checkin';
 import NumericKeypad from './NumericKeypad';
 
 const REINICIO_MS = 4000;
 
 type Resultado = CheckinResponse | { resultado: 'denegado'; mensaje: string; razon: null };
+type Modo = 'socio' | 'invitado';
 
 function CheckinKiosk() {
+  const [modo, setModo] = useState<Modo>('socio');
   const [cedula, setCedula] = useState('');
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [bloqueadoHasta, setBloqueadoHasta] = useState<Date | null>(null);
   const reinicioRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  function onErrorCheckin(error: unknown) {
+    if (error instanceof DispositivoBloqueadoError) {
+      setBloqueadoHasta(error.bloqueadoHasta);
+      setCedula('');
+      return;
+    }
+    const noEncontrado = isAxiosError(error) && error.response?.status === 404;
+    mostrarResultado({
+      resultado: 'denegado',
+      mensaje: noEncontrado
+        ? 'Cédula no registrada. Dirígete a recepción.'
+        : 'No se pudo validar el ingreso. Intenta de nuevo.',
+      razon: null,
+    });
+  }
+
   const mutation = useMutation({
     mutationFn: postCheckin,
     onSuccess: (data) => mostrarResultado(data),
-    onError: (error) => {
-      if (error instanceof DispositivoBloqueadoError) {
-        setBloqueadoHasta(error.bloqueadoHasta);
-        setCedula('');
-        return;
-      }
-      const noEncontrado = isAxiosError(error) && error.response?.status === 404;
-      mostrarResultado({
-        resultado: 'denegado',
-        mensaje: noEncontrado
-          ? 'Cédula no registrada. Dirígete a recepción.'
-          : 'No se pudo validar el ingreso. Intenta de nuevo.',
-        razon: null,
-      });
+    onError: onErrorCheckin,
+  });
+
+  const guestMutation = useMutation({
+    mutationFn: checkinGuest,
+    onSuccess: (data) => {
+      setModo('socio');
+      mostrarResultado(data);
     },
+    onError: onErrorCheckin,
   });
 
   function mostrarResultado(data: Resultado) {
@@ -65,6 +83,16 @@ function CheckinKiosk() {
     );
   }
 
+  if (modo === 'invitado') {
+    return (
+      <GuestForm
+        pending={guestMutation.isPending}
+        onCancel={() => setModo('socio')}
+        onSubmit={(input) => guestMutation.mutate(input)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-member-bg flex items-center justify-center p-8">
       <div className="bg-white rounded-card shadow-md p-10 w-full max-w-md text-center">
@@ -81,7 +109,109 @@ function CheckinKiosk() {
           onBackspace={() => setCedula((prev) => prev.slice(0, -1))}
           onSubmit={handleSubmit}
         />
+
+        <button
+          type="button"
+          onClick={() => setModo('invitado')}
+          className="mt-6 w-full min-h-[48px] rounded-card border-2 border-member-navy text-member-navy text-lg font-semibold hover:bg-member-navy hover:text-white"
+        >
+          Ingresar un invitado
+        </button>
       </div>
+    </div>
+  );
+}
+
+function GuestForm({
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (input: {
+    cedulaTitular: string;
+    cedulaInvitado: string;
+    nombreInvitado: string;
+  }) => void;
+}) {
+  const [cedulaTitular, setCedulaTitular] = useState('');
+  const [cedulaInvitado, setCedulaInvitado] = useState('');
+  const [nombreInvitado, setNombreInvitado] = useState('');
+
+  const listo =
+    cedulaTitular.trim().length > 0 &&
+    cedulaInvitado.trim().length > 0 &&
+    nombreInvitado.trim().length > 0;
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!listo || pending) return;
+    onSubmit({
+      cedulaTitular: cedulaTitular.trim(),
+      cedulaInvitado: cedulaInvitado.trim(),
+      nombreInvitado: nombreInvitado.trim(),
+    });
+  }
+
+  return (
+    <div className="min-h-screen bg-member-bg flex items-center justify-center p-8">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-card shadow-md p-10 w-full max-w-md"
+      >
+        <h1 className="text-member-navy-text text-2xl font-bold text-center">Ingreso de invitado</h1>
+        <p className="text-member-muted text-center mt-1 mb-6">
+          El socio titular debe estar presente y registrar a su invitado.
+        </p>
+
+        <label className="block text-sm text-member-navy-text font-medium mb-1" htmlFor="ct">
+          Cédula del socio titular
+        </label>
+        <input
+          id="ct"
+          inputMode="numeric"
+          value={cedulaTitular}
+          onChange={(e) => setCedulaTitular(e.target.value)}
+          className="w-full min-h-[48px] border-2 border-gray-300 rounded-card px-3 text-xl mb-4"
+        />
+
+        <label className="block text-sm text-member-navy-text font-medium mb-1" htmlFor="ci">
+          Cédula del invitado
+        </label>
+        <input
+          id="ci"
+          inputMode="numeric"
+          value={cedulaInvitado}
+          onChange={(e) => setCedulaInvitado(e.target.value)}
+          className="w-full min-h-[48px] border-2 border-gray-300 rounded-card px-3 text-xl mb-4"
+        />
+
+        <label className="block text-sm text-member-navy-text font-medium mb-1" htmlFor="ni">
+          Nombre del invitado
+        </label>
+        <input
+          id="ni"
+          value={nombreInvitado}
+          onChange={(e) => setNombreInvitado(e.target.value)}
+          className="w-full min-h-[48px] border-2 border-gray-300 rounded-card px-3 text-xl mb-6"
+        />
+
+        <button
+          type="submit"
+          disabled={!listo || pending}
+          className="w-full min-h-[56px] rounded-card bg-member-navy text-white text-xl font-semibold disabled:opacity-50"
+        >
+          Registrar ingreso
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mt-3 w-full min-h-[48px] rounded-card border-2 border-gray-300 text-member-muted text-lg font-medium hover:bg-gray-50"
+        >
+          Volver
+        </button>
+      </form>
     </div>
   );
 }

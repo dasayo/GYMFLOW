@@ -25,7 +25,7 @@ function formatearFecha(iso: string | null): string {
   });
 }
 
-// Criterio de 007: aviso SOLO si quedan entre 0 y 10 días; con más de 10
+// Criterio de HU-06: aviso SOLO si quedan entre 0 y 10 días; con más de 10
 // días no se muestra nada.
 function AvisoVencimiento({ resumen }: { resumen: MembershipSummary }) {
   const dias = resumen.dias_restantes;

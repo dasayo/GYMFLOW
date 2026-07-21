@@ -1,4 +1,4 @@
-"""feature 002: tabla checkin_device_locks y razon_denegacion
+"""HU-02: tabla checkin_device_locks y razon_denegacion
 
 Revision ID: e8bdfb173fb7
 Revises: adc852f8fca8

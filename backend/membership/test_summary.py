@@ -208,7 +208,7 @@ def test_resumen_sin_token_401(db):
 
 
 def test_resumen_con_jwt_de_staff_403(db):
-    # Un JWT de staff (003) no lleva el claim kind=member: no sirve en el portal.
+    # Un JWT de staff (HU-10) no lleva el claim kind=member: no sirve en el portal.
     token_staff = create_access_token({"sub": "1", "rol": "administrador"})
     resp = client.get(
         "/membresias/me/resumen", headers={"Authorization": f"Bearer {token_staff}"}

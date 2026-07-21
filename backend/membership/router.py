@@ -1,6 +1,6 @@
 """
-Router de membership. `GET /membresias/tipos` es lectura mínima para 004
-(elegir tipo al asignar/renovar); el CRUD completo del catálogo (009) vive
+Router de membership. `GET /membresias/tipos` es lectura mínima para HU-07
+(elegir tipo al asignar/renovar); el CRUD completo del catálogo (HU-08) vive
 bajo el mismo prefijo pero exige rol Administrador (RF-09).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -94,7 +94,7 @@ def get_mi_resumen(
     db: Session = Depends(get_db),
     member=Depends(require_member),
 ) -> MembershipSummaryOut:
-    """007 (RF-04): resumen del propio Miembro logueado en el portal (011).
+    """HU-06 (RF-04): resumen del propio Miembro logueado en el portal.
     El user_id sale del JWT — nunca de un parámetro, así un socio no puede
     consultar el resumen de otro."""
     return membership_service.get_membership_summary_detail(int(member["sub"]), db)

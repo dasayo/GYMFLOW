@@ -1,10 +1,9 @@
 @import "tailwindcss";
 
-/* Tokens extraídos por muestreo de píxeles de los mockups —
-   ver spec/constitution/design-system.md para el detalle y las dudas
-   abiertas (rojo/error y tipografía no tienen dato de origen).
-   Tailwind v4 genera las utilidades automáticamente a partir de estas
-   variables (ej. --color-member-navy → bg-member-navy, text-member-navy). */
+/* Tokens del portal del socio, extraídos por muestreo de píxeles de los
+   mockups en docs/Diseño Preliminar.docx. Tailwind v4 genera las
+   utilidades automáticamente a partir de estas variables (ej.
+   --color-member-navy → bg-member-navy, text-member-navy). */
 @theme {
   --color-member-navy: #1c294c;
   --color-member-navy-text: #3d4a68;
@@ -15,8 +14,8 @@
   --color-member-purple: #cd80e8;
   --color-member-bg: #f5f6fb;
   --color-member-muted: #5a5570;
-  /* Rojo/error del portal: sin dato en los mockups; el equipo adoptó el
-     red-600 estándar de Tailwind (design-system.md, resuelto 2026-07-11). */
+  /* Rojo/error del portal: sin dato en los mockups; se adoptó el red-600
+     estándar de Tailwind para credenciales inválidas/sesión expirada. */
   --color-member-error: #dc2626;
 
   --radius-card: 1rem;

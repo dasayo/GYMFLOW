@@ -7,6 +7,7 @@ from decimal import Decimal
 import pytest
 
 from members.service import (
+    LIMITE_RESULTADOS_BUSQUEDA,
     CedulaYaRegistradaError,
     EmailYaRegistradoError,
     UsuarioNoEncontradoError,
@@ -17,6 +18,7 @@ from members.service import (
     list_users,
     puede_asignar_rol,
     renew_membership,
+    search_users,
     update_user,
 )
 from models import CheckIn, EstadoUsuario, MembershipType, ResultadoCheckin, RolUsuario
@@ -150,3 +152,72 @@ def test_puede_asignar_rol_empleado_admin_o_permiso_individual():
 def test_puede_asignar_rol_miembro_invitado_sin_restriccion():
     assert puede_asignar_rol(RolUsuario.empleado, set(), RolUsuario.miembro) is True
     assert puede_asignar_rol(RolUsuario.empleado, set(), RolUsuario.invitado) is True
+
+
+# --- HU-03: búsqueda por múltiples criterios (nombre / cédula, parcial) ---
+
+
+def _sembrar_para_busqueda(db) -> None:
+    create_user("555444333", "Laura Gómez", "laura@test.com", RolUsuario.miembro, EstadoUsuario.activo, None, db)
+    create_user("100200300", "Laura Restrepo", "lau2@test.com", RolUsuario.miembro, EstadoUsuario.activo, None, db)
+    create_user("987654321", "Carlos Pérez", "carlos@test.com", RolUsuario.miembro, EstadoUsuario.activo, None, db)
+
+
+def test_search_users_por_cedula_exacta(db):
+    _sembrar_para_busqueda(db)
+    resultados = search_users("555444333", db)
+    assert [u.nombre for u in resultados] == ["Laura Gómez"]
+
+
+def test_search_users_por_cedula_parcial(db):
+    """Criterio 5 de la spec: el documento admite coincidencia parcial — el
+    socio que solo recuerda los últimos dígitos igual se encuentra."""
+    _sembrar_para_busqueda(db)
+    resultados = search_users("4443", db)
+    assert [u.nombre for u in resultados] == ["Laura Gómez"]
+
+
+def test_search_users_por_nombre_parcial_varias_coincidencias(db):
+    """Homónimos: se devuelve la lista para que el staff elija, nunca se
+    autoselecciona."""
+    _sembrar_para_busqueda(db)
+    resultados = search_users("Laura", db)
+    assert [u.nombre for u in resultados] == ["Laura Gómez", "Laura Restrepo"]
+
+
+def test_search_users_es_case_insensitive(db):
+    _sembrar_para_busqueda(db)
+    assert len(search_users("laura", db)) == 2
+    assert len(search_users("LAURA", db)) == 2
+
+
+def test_search_users_sin_coincidencias(db):
+    _sembrar_para_busqueda(db)
+    assert search_users("Ninguno", db) == []
+
+
+def test_search_users_query_vacia_no_devuelve_el_padron(db):
+    _sembrar_para_busqueda(db)
+    assert search_users("", db) == []
+    assert search_users("   ", db) == []
+
+
+def test_search_users_comodines_like_son_literales(db):
+    """Un "_" o "%" escrito en el buscador se busca literal; si se filtrara
+    como comodín de SQL devolvería el padrón entero."""
+    _sembrar_para_busqueda(db)
+    assert search_users("_", db) == []
+    assert search_users("%", db) == []
+
+
+def test_search_users_ignora_anonimizados_rn07(db):
+    _sembrar_para_busqueda(db)
+    objetivo = search_users("Carlos", db)[0]
+    anonymize_user(objetivo.id, db)
+    assert search_users("Carlos", db) == []
+
+
+def test_search_users_respeta_el_limite(db):
+    for i in range(LIMITE_RESULTADOS_BUSQUEDA + 5):
+        create_user(f"90{i:04d}", f"Repetido {i}", None, RolUsuario.miembro, EstadoUsuario.activo, None, db)
+    assert len(search_users("Repetido", db)) == LIMITE_RESULTADOS_BUSQUEDA

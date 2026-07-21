@@ -129,6 +129,168 @@ def checkin_member(
     return _respuesta_exitosa(user.nombre, resumen)
 
 
+def first_day_courtesy(
+    cedula: str, nombre: str, db: Session
+) -> tuple[CheckinResultado, str, str | None, int | None, RazonDenegacion | None]:
+    """Registra la cortesía de primer día de un prospecto (HU-04).
+
+    Es un flujo de Staff desde el backoffice (no self-service en kiosko),
+    por eso no toca el contador de bloqueo de dispositivo (RN-03).
+
+    Args:
+        cedula: Cédula del prospecto.
+        nombre: Nombre capturado por el Staff.
+        db: Sesión de base de datos activa.
+
+    Returns:
+        La misma tupla que :func:`checkin_member`
+        ``(resultado, mensaje, nombre, visitas_restantes, razon)``.
+    """
+    user = members_service.get_user_by_cedula(cedula, db)
+    repo = CheckinRepository(db)
+
+    if user is not None:
+        if user.cortesia_usada:
+            # Segunda cortesía: denegada y registrada (rastro auditable,
+            # mismo criterio que HU-02 para las denegaciones).
+            razon = RazonDenegacion.cortesia_ya_utilizada
+            repo.insert(
+                CheckIn(
+                    usuario_id=user.id,
+                    resultado=ResultadoCheckin.denegado,
+                    razon_denegacion=razon.value,
+                    is_active=False,
+                )
+            )
+            db.commit()
+            return _respuesta_denegada(
+                razon,
+                "CORTESÍA YA UTILIZADA. Esta persona ya usó su primer día gratis "
+                "— invítala a afiliarse.",
+                user.nombre,
+            )
+        # La cédula existe pero nunca usó cortesía: es un usuario ya registrado
+        # (socio/staff), no un prospecto nuevo. No se persiste CheckIn — no es
+        # un intento de abuso, simplemente la cortesía no aplica.
+        return _respuesta_denegada(
+            RazonDenegacion.ya_registrado,
+            "CÉDULA YA REGISTRADA. Esta persona ya tiene una cuenta — debe hacer "
+            "check-in normal, no aplica cortesía.",
+            user.nombre,
+        )
+
+    # Cédula nueva → transacción única (RN-10): crea el prospecto y el CheckIn
+    # exitoso de cortesía juntos, o revierte ambos.
+    try:
+        prospecto = members_service.create_prospect(cedula, nombre, db)
+        repo.insert(
+            CheckIn(
+                usuario_id=prospecto.id,
+                resultado=ResultadoCheckin.exitoso,
+                is_active=True,
+            )
+        )
+        db.commit()
+    except IntegrityError:
+        # Carrera: otro registro ganó el índice único de `usuarios.cedula`
+        # entre la comprobación y el insert. Ya no es un prospecto nuevo.
+        db.rollback()
+        return _respuesta_denegada(
+            RazonDenegacion.ya_registrado,
+            "CÉDULA YA REGISTRADA. Intenta de nuevo.",
+            None,
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+    return _respuesta_cortesia(prospecto.nombre)
+
+
+def checkin_guest(
+    cedula_titular: str, cedula_invitado: str, nombre_invitado: str, db: Session
+) -> tuple[CheckinResultado, str, str | None, int | None, RazonDenegacion | None]:
+    """El titular (presente en el kiosko) hace entrar a su invitado (HU-05).
+
+    Valida que el titular tenga membresía activa y cupo de invitados,
+    descuenta exactamente 1 cupo (RN-09) y registra el CheckIn del
+    invitado, todo en una transacción única (RN-10). Sin ventana temporal:
+    la presencia del titular es siempre requerida.
+
+    Args:
+        cedula_titular: Cédula del socio titular, presente en el kiosko.
+        cedula_invitado: Cédula del invitado.
+        nombre_invitado: Nombre del invitado.
+        db: Sesión de base de datos activa.
+
+    Returns:
+        La misma tupla que :func:`checkin_member`.
+    """
+    titular = members_service.get_user_by_cedula(cedula_titular, db)
+    if titular is None:
+        return _respuesta_denegada(
+            RazonDenegacion.titular_no_encontrado,
+            "ACCESO DENEGADO. El socio titular no está registrado.",
+            None,
+        )
+
+    # No se usa get_active_membership: exige visitas del titular, que el
+    # invitado NO consume. El invitado descuenta cupo_invitados (RN-04).
+    membresia = membership_service.get_membership_for_guest(titular.id, db)
+    if membresia is None:
+        return _respuesta_denegada(
+            RazonDenegacion.titular_sin_membresia,
+            f"ACCESO DENEGADO. El socio {titular.nombre} no tiene una membresía activa.",
+            titular.nombre,
+        )
+    if membresia.cupo_invitados_restantes <= 0:
+        return _respuesta_denegada(
+            RazonDenegacion.sin_cupo_invitados,
+            f"ACCESO DENEGADO. El socio {titular.nombre} no tiene cupos de invitado disponibles.",
+            titular.nombre,
+        )
+
+    invitado = members_service.get_or_create_guest_user(cedula_invitado, nombre_invitado, db)
+    repo = CheckinRepository(db)
+    hoy = membership_service.hoy()
+
+    # Filtro 1 (análogo a HU-01): si el invitado ya ingresó hoy, no se
+    # descuenta otro cupo — reingreso idempotente del día.
+    if repo.exists_successful_checkin_today(invitado.id, hoy):
+        db.commit()
+        return _respuesta_invitado_ya_ingreso(
+            invitado.nombre, titular.nombre, membresia.cupo_invitados_restantes
+        )
+
+    # Transacción única (RN-10): descuenta el cupo e inserta el CheckIn, o
+    # revierte ambos.
+    try:
+        membership_service.consume_guest_slot(membresia.id, db)
+        repo.insert(
+            CheckIn(
+                usuario_id=invitado.id,
+                titular_id=titular.id,
+                resultado=ResultadoCheckin.exitoso,
+                is_active=True,
+            )
+        )
+        db.commit()
+    except IntegrityError:
+        # Carrera: el invitado consiguió otro CheckIn is_active hoy entre el
+        # chequeo y el insert. Se revierte (no se descuenta doble cupo).
+        db.rollback()
+        actual = membership_service.get_membership_for_guest(titular.id, db)
+        cupo = actual.cupo_invitados_restantes if actual else None
+        return _respuesta_invitado_ya_ingreso(nombre_invitado, titular.nombre, cupo)
+    except Exception:
+        db.rollback()
+        raise
+
+    return _respuesta_invitado_exitoso(
+        invitado.nombre, titular.nombre, membresia.cupo_invitados_restantes
+    )
+
+
 def get_attendance(fecha_inicio: date, fecha_fin: date, db: Session) -> list[CheckIn]:
     """Asistencias (``CheckIn`` con ``is_active=true``) en el rango dado,
     ambos extremos inclusive (HU-09, RF-12).
@@ -233,6 +395,50 @@ def _local_date(fecha_hora: 'datetime') -> date:
     if fecha_hora.tzinfo is None:
         fecha_hora = fecha_hora.replace(tzinfo=ZoneInfo('UTC'))
     return fecha_hora.astimezone(ZoneInfo(settings.timezone)).date()
+
+
+def _respuesta_cortesia(nombre: str | None):
+    """Éxito de cortesía (HU-04). Sin visitas_restantes — un prospecto no
+    tiene membresía, por eso el campo va en None (no es 0)."""
+    return (
+        CheckinResultado.exitoso,
+        f"CORTESÍA CONCEDIDA. Bienvenido/a {nombre}. Primer día gratis "
+        "registrado — invítalo a afiliarse.",
+        nombre,
+        None,
+        None,
+    )
+
+
+def _respuesta_invitado_exitoso(nombre_invitado: str | None, nombre_titular: str | None, cupo: int):
+    """Éxito de invitado (HU-05). `visitas_restantes` va en None (el
+    invitado no tiene visitas propias); el cupo restante del titular va en
+    el mensaje."""
+    return (
+        CheckinResultado.exitoso,
+        f"ACCESO PERMITIDO. Bienvenido/a {nombre_invitado}. El socio "
+        f"{nombre_titular} tiene ahora {cupo} invitaciones restantes.",
+        nombre_invitado,
+        None,
+        None,
+    )
+
+
+def _respuesta_invitado_ya_ingreso(
+    nombre_invitado: str | None, nombre_titular: str | None, cupo: int | None
+):
+    sufijo = (
+        f" El socio {nombre_titular} tiene {cupo} invitaciones restantes."
+        if cupo is not None
+        else ""
+    )
+    return (
+        CheckinResultado.exitoso,
+        f"ACCESO PERMITIDO. {nombre_invitado} ya había ingresado hoy.{sufijo}",
+        nombre_invitado,
+        None,
+        None,
+    )
 
 
 def _respuesta_denegada(razon: RazonDenegacion, mensaje: str, nombre: str | None):

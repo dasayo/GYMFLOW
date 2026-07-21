@@ -4,7 +4,7 @@ Tabla `usuarios` — dueño: el módulo members.
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
@@ -39,6 +39,9 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # NOTA (duda abierta de HU-04 — Cortesía de primer día): la marca de "cortesía usada" /
-    # rol Prospecto NO se agrega en este scaffold. Se define junto con el equipo
-    # al implementar esa feature, vía migración Alembic dedicada.
+    # Marca que esta cédula ya usó su cortesía de primer día (HU-04, RF-07).
+    # Un "Prospecto" es un User con rol=invitado y este flag en True (flag,
+    # no un valor de enum nuevo). Impide una segunda cortesía; se conserva
+    # al afiliarse (HU-07) para no concederla de nuevo aunque el rol pase a
+    # miembro.
+    cortesia_usada: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

@@ -85,6 +85,33 @@ def list_users(db: Session) -> list[User]:
     return MembersRepository(db).list_all()
 
 
+# Tope de resultados de la búsqueda (HU-03). Valor confirmado con el equipo.
+LIMITE_RESULTADOS_BUSQUEDA = 50
+
+
+def search_users(query: str, db: Session) -> list[User]:
+    """Busca usuarios por coincidencia parcial de nombre o cédula (HU-03).
+
+    Punto de entrada del módulo dueño de ``usuarios`` — kiosko y backoffice
+    pasan por aquí, nunca por el repository.
+
+    Una query vacía o de puros espacios devuelve lista vacía: no es una
+    búsqueda, y devolver el padrón completo haría que un campo en blanco se
+    comportara distinto que :func:`list_users` sin decirlo.
+
+    Args:
+        query: Término de búsqueda (nombre o cédula, parcial).
+        db: Sesión de base de datos activa.
+
+    Returns:
+        Como mucho ``LIMITE_RESULTADOS_BUSQUEDA`` coincidencias.
+    """
+    termino = query.strip()
+    if not termino:
+        return []
+    return MembersRepository(db).search_by_name_or_doc(termino, LIMITE_RESULTADOS_BUSQUEDA)
+
+
 def get_users_by_ids(user_ids: list[int], db: Session) -> dict[int, User]:
     """Resuelve varios usuarios en lote (evita N+1 al enriquecer el reporte
     de asistencias, HU-09). Punto de entrada del módulo dueño de ``usuarios``
@@ -150,6 +177,70 @@ def create_user(
     user = MembersRepository(db).create(user)
     db.commit()
     return user
+
+
+def create_prospect(cedula: str, nombre: str, db: Session) -> User:
+    """Crea un Prospecto (HU-04): un User con ``rol=invitado`` y
+    ``cortesia_usada=True``.
+
+    No hace commit: la cortesía es una transacción única (RN-10) que
+    confirma ``checkin.service`` junto con el CheckIn, igual que
+    ``consume_visit`` en el flujo de HU-01.
+
+    No revalida unicidad de cédula aquí a propósito: el llamador
+    (``checkin.service.first_day_courtesy``) ya comprobó que la cédula no
+    existe, y el índice único de ``usuarios.cedula`` es la última línea
+    ante una carrera.
+
+    Args:
+        cedula: Cédula del prospecto.
+        nombre: Nombre capturado.
+        db: Sesión de base de datos activa.
+    """
+    prospecto = User(
+        cedula=cedula,
+        nombre=nombre,
+        email=None,
+        rol=RolUsuario.invitado,
+        estado=EstadoUsuario.activo,
+        password_hash=None,
+        cortesia_usada=True,
+    )
+    return MembersRepository(db).create(prospecto)
+
+
+def get_or_create_guest_user(cedula: str, nombre: str, db: Session) -> User:
+    """Identidad del invitado como fila en ``usuarios`` con ``rol=invitado``
+    (HU-05). Necesaria porque ``CheckIn.usuario_id`` es un FK NOT NULL a
+    ``usuarios``.
+
+    Reutiliza la fila si la cédula ya existe (la cédula es única) — sea un
+    invitado recurrente o incluso un socio que viene como invitado de otro;
+    en ese caso NO se sobrescriben sus datos. No hace commit: el check-in de
+    invitado es una transacción única (RN-10) que confirma
+    ``checkin.service``.
+
+    Args:
+        cedula: Cédula del invitado.
+        nombre: Nombre capturado.
+        db: Sesión de base de datos activa.
+
+    Returns:
+        El usuario existente con esa cédula, o uno nuevo si no existía.
+    """
+    repo = MembersRepository(db)
+    existente = repo.get_by_cedula(cedula)
+    if existente is not None:
+        return existente
+    invitado = User(
+        cedula=cedula,
+        nombre=nombre,
+        email=None,
+        rol=RolUsuario.invitado,
+        estado=EstadoUsuario.activo,
+        password_hash=None,
+    )
+    return repo.create(invitado)
 
 
 def update_user(user_id: int, db: Session, **fields) -> User:

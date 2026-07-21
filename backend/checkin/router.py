@@ -14,9 +14,17 @@ from checkin.schemas import (
     AttendanceConsistencyOut,
     CheckinRequest,
     CheckinResponse,
+    CortesiaRequest,
     DispositivoBloqueadoInfo,
+    GuestCheckinRequest,
 )
-from checkin.service import UsuarioNoEncontradoError, checkin_member, get_member_attendance_consistency
+from checkin.service import (
+    UsuarioNoEncontradoError,
+    checkin_guest,
+    checkin_member,
+    first_day_courtesy,
+    get_member_attendance_consistency,
+)
 from core.config import now as _now
 from core.database import get_db
 
@@ -57,6 +65,48 @@ def post_checkin(
         )
     except UsuarioNoEncontradoError:
         raise HTTPException(status_code=404, detail="Cédula no registrada")
+    return CheckinResponse(
+        resultado=resultado,
+        mensaje=mensaje,
+        nombre=nombre,
+        visitas_restantes=visitas_restantes,
+        razon=razon,
+    )
+
+
+@router.post("/guest", response_model=CheckinResponse)
+def post_checkin_guest(
+    payload: GuestCheckinRequest,
+    db: Session = Depends(get_db),
+    device_id: str = Depends(enforce_device_not_locked),
+) -> CheckinResponse:
+    """HU-05: el titular presente hace entrar a su invitado desde el kiosko.
+    Mismo guard de dispositivo que el check-in normal (RN-03). El descuento de
+    cupo y el registro del CheckIn son atómicos (RN-10)."""
+    resultado, mensaje, nombre, visitas_restantes, razon = checkin_guest(
+        payload.cedula_titular, payload.cedula_invitado, payload.nombre_invitado, db
+    )
+    return CheckinResponse(
+        resultado=resultado,
+        mensaje=mensaje,
+        nombre=nombre,
+        visitas_restantes=visitas_restantes,
+        razon=razon,
+    )
+
+
+@router.post("/cortesia", response_model=CheckinResponse)
+def post_cortesia(
+    payload: CortesiaRequest,
+    db: Session = Depends(get_db),
+    _permiso: dict = Depends(require_permission("members.gestionar_usuarios")),
+) -> CheckinResponse:
+    """HU-04: el Staff registra la cortesía de primer día de un prospecto. Gateado
+    con `members.gestionar_usuarios` (crea un User, mismo permiso que el CRUD de
+    004). No usa el guard de dispositivo del kiosko: es un flujo de backoffice."""
+    resultado, mensaje, nombre, visitas_restantes, razon = first_day_courtesy(
+        payload.cedula, payload.nombre, db
+    )
     return CheckinResponse(
         resultado=resultado,
         mensaje=mensaje,

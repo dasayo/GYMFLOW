@@ -1,5 +1,5 @@
 """
-Tests HTTP del CRUD de tipos de membresía (009). Verifica RBAC (solo
+Tests HTTP del CRUD de tipos de membresía (HU-08). Verifica RBAC (solo
 Administrador, RF-09), el flujo feliz y los bloqueos RN-05 vía API.
 """
 from decimal import Decimal

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(validation_alias="JWT_SECRET")
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 30
-    # Sesión del Miembro en el portal (011): access token corto + refresh token
+    # Sesión del Miembro en el portal: access token corto + refresh token
     # con ventana de inactividad deslizante (valores confirmados por el equipo).
     member_access_token_minutes: int = 15
     member_refresh_days: int = 7

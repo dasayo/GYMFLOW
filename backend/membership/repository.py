@@ -18,7 +18,7 @@ class MembershipRepository:
     def get_active_by_user(self, user_id: int, hoy: date) -> Membership | None:
         """La fila "vigente" es la que está en ventana de fechas
         (fecha_inicio <= hoy), no solo la que tiene estado=activa: una
-        renovación anticipada (004) puede dejar dos filas en estado=activa
+        renovación anticipada (HU-07) puede dejar dos filas en estado=activa
         simultáneamente (la vieja, todavía vigente, y la nueva, con
         fecha_inicio en el futuro) — sin este filtro y el order_by,
         `.first()` elegiría una de las dos de forma no determinística."""
@@ -54,7 +54,7 @@ class MembershipRepository:
         )
 
     def list_latest_by_user_ids(self, user_ids: list[int]) -> dict[int, Membership]:
-        """010: la Membership más reciente de cada usuario, en una sola query
+        """HU-09: la Membership más reciente de cada usuario, en una sola query
         (evita N+1 al enriquecer el reporte con el tipo de plan). Mismo criterio
         de "última" que `get_latest_by_user` (fecha_inicio desc, id desc)."""
         if not user_ids:
@@ -94,7 +94,7 @@ class MembershipTypeRepository:
 
     def list_active(self) -> list[MembershipType]:
         """Solo los tipos `activo=true` — no tiene sentido ofrecer para
-        asignar/renovar (004) un tipo que ya fue desactivado (009)."""
+        asignar/renovar (HU-07) un tipo que ya fue desactivado (HU-08)."""
         return (
             self.db.query(MembershipType)
             .filter(MembershipType.activo.is_(True))
@@ -104,11 +104,11 @@ class MembershipTypeRepository:
 
     def list_all(self) -> list[MembershipType]:
         """Catálogo completo (activos e inactivos) para el CRUD del
-        Administrador (009). El listado de empleado usa `list_active`."""
+        Administrador (HU-08). El listado de empleado usa `list_active`."""
         return self.db.query(MembershipType).order_by(MembershipType.nombre).all()
 
     def get_names_by_ids(self, tipo_ids: list[int]) -> dict[int, str]:
-        """010: nombres de tipos en lote para enriquecer el reporte."""
+        """HU-09: nombres de tipos en lote para enriquecer el reporte."""
         if not tipo_ids:
             return {}
         filas = (
@@ -140,7 +140,7 @@ class MembershipTypeRepository:
         )
 
     def count_any_memberships_by_type(self, tipo_id: int) -> int:
-        """009: cuántas `Membership` referencian este tipo, sin importar estado
+        """HU-08: cuántas `Membership` referencian este tipo, sin importar estado
         (activa o histórica). Un tipo con historial no se borra físicamente,
         solo se desactiva (preserva la trazabilidad de precios/planes)."""
         return (

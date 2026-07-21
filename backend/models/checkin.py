@@ -36,5 +36,5 @@ class CheckIn(Base):
     is_active: Mapped[bool] = mapped_column(default=False)
 
     # Índice único parcial (usuario_id, DATE(fecha_hora)) WHERE is_active=true
-    # se agrega en la migración de Alembic de la feature 001 (anti doble
+    # se agrega en la migración de Alembic de HU-01 (anti doble
     # check-in concurrente, RN-02).

@@ -2,7 +2,7 @@
 Router de members (HU-07 — Gestión de usuarios, RF-10). Validación de entrada
 con Pydantic (members/schemas.py), nunca a mano aquí (convención del proyecto).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 import auth.service as auth_service
@@ -42,7 +42,7 @@ _GESTIONAR_USUARIOS = Depends(require_permission("members.gestionar_usuarios"))
 
 
 def _validar_rol_permitido(actor_payload: dict, rol_objetivo: RolUsuario, db: Session) -> None:
-    """004: quién puede crear/ascender un usuario a `rol_objetivo` — ver
+    """HU-07: quién puede crear/ascender un usuario a `rol_objetivo` — ver
     members.service.puede_asignar_rol. `administrador` nunca necesita
     permisos individuales para esto."""
     actor_rol = RolUsuario(actor_payload["rol"])
@@ -75,6 +75,21 @@ def post_usuario(
 @router.get("", response_model=list[UserOut])
 def get_usuarios(db: Session = Depends(get_db), _staff=_GESTIONAR_USUARIOS) -> list[UserOut]:
     return [UserOut.model_validate(u) for u in members_service.list_users(db)]
+
+
+# OJO: esta ruta va declarada ANTES de "/{user_id}". FastAPI resuelve por
+# orden de declaración, así que si estuviera después, "buscar" se intentaría
+# parsear como `user_id: int` y el endpoint respondería 422.
+@router.get("/buscar", response_model=list[UserOut])
+def get_buscar_usuarios(
+    q: str = Query(..., max_length=150),
+    db: Session = Depends(get_db),
+    _staff=_GESTIONAR_USUARIOS,
+) -> list[UserOut]:
+    """HU-03: búsqueda por coincidencia parcial de nombre O cédula en un
+    solo campo. Gateada con el mismo permiso que el listado porque devuelve
+    los mismos datos."""
+    return [UserOut.model_validate(u) for u in members_service.search_users(q, db)]
 
 
 @router.get("/{user_id}", response_model=UserOut)

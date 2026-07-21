@@ -36,6 +36,14 @@ checkin.service module
    :show-inheritance:
    :undoc-members:
 
+checkin.test\_router module
+---------------------------
+
+.. automodule:: checkin.test_router
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 checkin.test\_service module
 ----------------------------
 

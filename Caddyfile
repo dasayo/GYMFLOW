@@ -1,0 +1,7 @@
+gymflow.biz, www.gymflow.biz {
+    reverse_proxy frontend:80
+}
+
+api.gymflow.biz {
+    reverse_proxy backend:8000
+}

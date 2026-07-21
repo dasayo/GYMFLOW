@@ -1,4 +1,4 @@
-"""feature 003: tablas permisos y usuario_permisos
+"""HU-10: tablas permisos y usuario_permisos
 
 Revision ID: e57695beaef9
 Revises: e8bdfb173fb7

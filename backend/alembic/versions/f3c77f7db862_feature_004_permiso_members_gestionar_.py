@@ -1,4 +1,4 @@
-"""feature 004: permiso members.gestionar_usuarios
+"""HU-07: permiso members.gestionar_usuarios
 
 Revision ID: f3c77f7db862
 Revises: 8a0c59bb9387

@@ -1,11 +1,12 @@
 import { isAxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Fragment, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 
 import {
   createUser,
   deleteUser,
   listUsers,
+  searchUsers,
   updateUser,
   type Rol,
   type UserCreate,
@@ -25,6 +26,30 @@ function UsersPage() {
     enabled: puedeGestionar,
   });
   const [seleccionadoId, setSeleccionadoId] = useState<number | null>(null);
+
+  // HU-03: búsqueda por nombre o cédula (coincidencia parcial, un solo campo).
+  const [busqueda, setBusqueda] = useState('');
+  const [termino, setTermino] = useState('');
+
+  // Debounce para no disparar una request por tecla. 300ms es latencia de
+  // interfaz, no una regla de negocio del spec.
+  useEffect(() => {
+    const id = setTimeout(() => setTermino(busqueda.trim()), 300);
+    return () => clearTimeout(id);
+  }, [busqueda]);
+
+  const buscando = termino.length > 0;
+  // La queryKey cuelga de QUERY_KEY a propósito: React Query invalida por
+  // prefijo, así que crear o eliminar un usuario también refresca los
+  // resultados de búsqueda sin lógica extra.
+  const resultados = useQuery({
+    queryKey: [...QUERY_KEY, 'buscar', termino],
+    queryFn: () => searchUsers(termino),
+    enabled: puedeGestionar && buscando,
+  });
+
+  const listaVisible = buscando ? resultados.data : usuarios.data;
+  const cargando = buscando ? resultados.isLoading : usuarios.isLoading;
 
   // Espejo de members.service.puede_asignar_rol (backend): solo para no
   // ofrecer una opción que el backend igual va a rechazar con 403. El
@@ -151,9 +176,45 @@ function UsersPage() {
         </p>
       )}
 
-      {usuarios.isLoading && <p className="text-gray-500">Cargando…</p>}
+      <div className="mb-4">
+        <label className="block text-xs text-gray-600 mb-1" htmlFor="busqueda">
+          Buscar por nombre o documento
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="busqueda"
+            type="search"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Ej. Laura, o 5554…"
+            className="w-72 border border-gray-300 rounded px-2 py-1 text-sm"
+          />
+          {buscando && (
+            <button
+              type="button"
+              onClick={() => setBusqueda('')}
+              className="text-sm text-gray-600 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+        {buscando && resultados.data && (
+          <p className="text-xs text-gray-500 mt-1">
+            {resultados.data.length === 0
+              ? 'Sin coincidencias.'
+              : `${resultados.data.length} resultado(s) para “${termino}”.`}
+          </p>
+        )}
+      </div>
 
-      {usuarios.data && (
+      {resultados.isError && (
+        <p className="text-red-600 text-sm mb-4">No se pudo completar la búsqueda.</p>
+      )}
+
+      {cargando && <p className="text-gray-500">Cargando…</p>}
+
+      {listaVisible && (
         <table className="w-full bg-white rounded-card shadow border border-gray-200 text-sm">
           <thead>
             <tr className="text-left text-gray-500 border-b border-gray-200">
@@ -166,7 +227,7 @@ function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {usuarios.data.map((u) => (
+            {listaVisible.map((u) => (
               <Fragment key={u.id}>
                 <tr
                   key={u.id}

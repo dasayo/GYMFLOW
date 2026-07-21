@@ -20,6 +20,10 @@ dist/
 
 # Docker
 *.pid
+# Override de puertos locales: si se comitea, cualquier `docker compose up`
+# en un servidor real también lo tomaría y expondría los puertos directo
+# a internet, saltándose el Caddy/reverse proxy de producción.
+docker-compose.override.yml
 
 # Editor / OS
 .DS_Store

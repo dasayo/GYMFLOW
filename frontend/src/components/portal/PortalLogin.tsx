@@ -16,12 +16,12 @@ function PortalLogin() {
     mutationFn: () => portalLogin(email, password),
     onSuccess: (session) => {
       auth.login(session.nombre);
-      navigate('/portal', { replace: true });
+      navigate('/', { replace: true });
     },
   });
 
   if (auth.estado === 'autenticado') {
-    return <Navigate to="/portal" replace />;
+    return <Navigate to="/" replace />;
   }
 
   function handleSubmit(e: FormEvent) {

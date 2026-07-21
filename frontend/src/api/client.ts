@@ -43,6 +43,19 @@ apiClient.interceptors.response.use(
   (error) => {
     if (isAxiosError(error) && error.response) {
       guardarTokenRenovado(error.response.headers);
+
+      // Sesión inválida a mitad de uso (token expirado/corrupto, cuenta
+      // desactivada): cerrar sesión y forzar login de nuevo, no dejar
+      // vistas de staff cargadas con datos viejos. Se excluye el propio
+      // intento de login: ese 401 es "contraseña incorrecta", lo maneja
+      // el formulario, no una sesión que se cayó.
+      const esIntentoDeLogin = error.config?.url === '/auth/login';
+      if (error.response.status === 401 && !esIntentoDeLogin) {
+        clearStoredToken();
+        localStorage.removeItem('gymflow-staff-rol');
+        localStorage.removeItem('gymflow-staff-permisos');
+        window.location.href = '/staff/login';
+      }
     }
     return Promise.reject(error);
   },

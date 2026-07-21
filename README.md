@@ -55,12 +55,13 @@ docker compose up --build   # migra y re-siembra solo
 
 ## Rutas del frontend
 
-- `/` — kiosko táctil de check-in (sin login, dispositivo físico).
+- `/` — dashboard del socio (HU-06): sin sesión redirige a `/portal/login`; con sesión, va directo al resumen de membresía.
+- `/kiosko` — kiosko táctil de check-in (sin login, dispositivo físico).
 - `/staff/login` — login del backoffice (Empleado/Administrador, HU-10 — Autenticación segura).
 - `/staff/home` — panel del backoffice (sidebar): usuarios y membresías (HU-07 — Gestión de usuarios), permisos, dispositivos bloqueados (RN-03).
 - `/portal/login` — portal del socio: login del Miembro con correo/contraseña.
 - `/portal/activar` — activación de cuenta del Miembro (la cuenta la crea el staff; el socio define su contraseña la primera vez).
-- `/portal` — dashboard del socio: resumen de membresía (HU-06) con aviso de vencimiento (≤10 días).
+- `/portal` — alias que redirige a `/` (compatibilidad con el link antiguo).
 
 ## Cuentas de desarrollo (sembradas automáticamente)
 

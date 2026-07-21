@@ -1,9 +1,9 @@
-import { Outlet, Route, Routes } from 'react-router';
+import { Navigate, Outlet, Route, Routes } from 'react-router';
 
 import { MemberAuthProvider } from './context/MemberAuthContext';
 
 import CheckinKiosk from './components/CheckinKiosk';
-import Home from './components/Home';
+import NotFound from './components/NotFound';
 import AttendanceReportPage from './components/backoffice/AttendanceReportPage';
 import CortesiaPage from './components/backoffice/CortesiaPage';
 import DispositivosBloqueados from './components/backoffice/DispositivosBloqueados';
@@ -22,8 +22,7 @@ import PortalProtectedRoute from './components/portal/PortalProtectedRoute';
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<CheckinKiosk />} />
-      <Route path="/home" element={<Home />} />
+      <Route path="/kiosko" element={<CheckinKiosk />} />
       <Route path="/staff/login" element={<LoginForm />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<StaffLayout />}>
@@ -36,8 +35,9 @@ function App() {
           <Route path="/staff/dispositivos-bloqueados" element={<DispositivosBloqueados />} />
         </Route>
       </Route>
-      {/* El provider del Miembro solo envuelve /portal/*: intenta un refresh
-          al montar y no queremos ese request en el kiosko ni en el backoffice. */}
+      {/* El provider del Miembro solo envuelve la raíz y /portal/*: intenta
+          un refresh al montar y no queremos ese request en el kiosko ni en
+          el backoffice. */}
       <Route
         element={
           <MemberAuthProvider>
@@ -45,12 +45,14 @@ function App() {
           </MemberAuthProvider>
         }
       >
+        <Route path="/portal" element={<Navigate to="/" replace />} />
         <Route path="/portal/login" element={<PortalLogin />} />
         <Route path="/portal/activar" element={<PortalActivate />} />
         <Route element={<PortalProtectedRoute />}>
-          <Route path="/portal" element={<PortalDashboard />} />
+          <Route path="/" element={<PortalDashboard />} />
         </Route>
       </Route>
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

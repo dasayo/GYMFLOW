@@ -1,5 +1,4 @@
 # GymFlow backend — FastAPI + SQLAlchemy + Alembic, dependencias con Pipenv
-# Ver spec/constitution/tech-stack.md y spec/constitution/ci-cd.md para las decisiones detrás de este archivo.
 
 FROM python:3.13-slim AS base
 
